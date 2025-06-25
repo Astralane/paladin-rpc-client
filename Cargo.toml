@@ -1,0 +1,17 @@
+[package]
+name = "paladin_txn_auctioneer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+tonic = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls"] }
+reqwest = { version = "0.11", features = ["json"] }
+dashmap = "5.5"
+anyhow = "1"
+chrono = "0.4"
