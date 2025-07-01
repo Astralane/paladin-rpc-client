@@ -1,5 +1,5 @@
-use crate::vendor::error::{IoErrorWithPartialEq, QuicError};
-use crate::vendor::quic_client_certificate::QuicClientCertificate;
+use crate::quic::error::{IoErrorWithPartialEq, QuicError};
+use crate::quic::quic_client_certificate::QuicClientCertificate;
 use quinn::{
     ClientConfig, Endpoint, IdleTimeout, TransportConfig, crypto::rustls::QuicClientConfig,
 };

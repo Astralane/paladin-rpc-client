@@ -1,6 +1,6 @@
 use crate::palidator_cache::PalidatorCache;
-use crate::vendor::quic_client_certificate::QuicClientCertificate;
-use crate::vendor::quic_networking::{create_client_config, create_client_endpoint};
+use crate::quic::quic_client_certificate::QuicClientCertificate;
+use crate::quic::quic_networking::{create_client_config, create_client_endpoint};
 use futures::StreamExt;
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
