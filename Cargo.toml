@@ -1,5 +1,23 @@
-[workspace]
-members = [
-    "server",
-    "p3-lib"
-]
+[package]
+name = "paladin_rpc_server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web server
+axum = "0.7"
+
+# Tokio async runtime
+tokio = { version = "1.38", features = ["full"] }
+
+# Serialization / Deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Base64 decoding
+base64 = "0.22"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
