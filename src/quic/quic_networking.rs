@@ -1,19 +1,17 @@
 use crate::quic::error::{IoErrorWithPartialEq, QuicError};
 use crate::quic::quic_client_certificate::QuicClientCertificate;
 use quinn::{
-    ClientConfig, Endpoint, IdleTimeout, TransportConfig, crypto::rustls::QuicClientConfig,
+    crypto::rustls::QuicClientConfig, ClientConfig, Endpoint, IdleTimeout, TransportConfig,
 };
-use solana_sdk::quic::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT};
+use solana_quic_definitions::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT, QUIC_SEND_FAIRNESS};
 use solana_streamer::nonblocking::quic::ALPN_TPU_PROTOCOL_ID;
-use solana_streamer::nonblocking::testing_utilities::SkipServerVerification;
+use solana_tls_utils::tls_client_config_builder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 pub(crate) fn create_client_config(client_certificate: Arc<QuicClientCertificate>) -> ClientConfig {
     // adapted from QuicLazyInitializedEndpoint::create_endpoint
-    let mut crypto = rustls::ClientConfig::builder()
-        .dangerous()
-        .with_custom_certificate_verifier(SkipServerVerification::new())
+    let mut crypto = tls_client_config_builder()
         .with_client_auth_cert(
             vec![client_certificate.certificate.clone()],
             client_certificate.key.clone_key(),
@@ -28,6 +26,7 @@ pub(crate) fn create_client_config(client_certificate: Arc<QuicClientCertificate
         let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
         res.max_idle_timeout(Some(timeout));
         res.keep_alive_interval(Some(QUIC_KEEP_ALIVE));
+        res.send_fairness(QUIC_SEND_FAIRNESS);
 
         res
     };

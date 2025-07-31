@@ -10,10 +10,16 @@ serde_json = "1.0"
 
 base64 = "0.22"
 
-solana-client = { version = "~2.1.1" }
-solana-sdk = { version = "~2.1.1", default-features = false }
-solana-streamer = { version = "~2.1.1" }
-solana-rpc-client-api = { version = "~2.1.1", default-features = false }
+solana-client = { version = "2.3.4" }
+solana-sdk = { version = "2.3.1" }
+solana-streamer = { version = "2.3.4" }
+solana-rpc-client-api = { version = "2.3.4" }
+solana-tls-utils = "2.3.4"
+solana-quic-definitions = "2.3.1"
+
+solana-commitment-config = "2.2.1"
+yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc.git", tag = "v8.0.0+solana.2.3.3" }
+yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc.git", tag = "v8.0.0+solana.2.3.3", default-features = false }
 
 rustls = { version = "0.23.15", default-features = false }
 tracing = "0.1.41"
@@ -22,6 +28,8 @@ axum = { version = "0.8.1", features = ["macros", "tower-log"] }
 quinn = "0.11.6"
 tokio-util = "0.7.14"
 futures = "0.3.31"
+futures-util = "0.3.31"
+dashmap = "6.1.0"
 figment = { version = "0.10.19", features = ["env"] }
 serde = { version = "1.0.219", features = ["derive"] }
 dotenvy = "0.15.7"

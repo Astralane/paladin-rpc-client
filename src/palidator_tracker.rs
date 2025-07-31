@@ -4,8 +4,8 @@ use crate::quic::quic_networking::{create_client_config, create_client_endpoint}
 use futures::StreamExt;
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client_api::response::SlotUpdate;
-use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::signature::Keypair;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
@@ -63,11 +63,11 @@ impl PalidatorTracker {
         slot: Arc<AtomicU64>,
         cancel: CancellationToken,
     ) {
-        let _ = tokio::join!(
-            cancel.cancelled(),
-            Self::run_cache_reload(cache, rpc.clone(), endpoint),
-            Self::run_slot_update(slot, ws_url)
-        );
+        let _ = tokio::select! {
+            _ = cancel.cancelled() => {},
+            _ = Self::run_cache_reload(cache, rpc.clone(), endpoint) => {},
+            _ = Self::run_slot_update(slot, ws_url) => {}
+        };
     }
 
     async fn run_cache_reload(
@@ -86,7 +86,7 @@ impl PalidatorTracker {
 
             if epoch_info.epoch == cache.read().unwrap().epoch {
                 // check every minute for epoch changes
-                tokio::time::sleep(std::time::Duration::from_secs(60 *60)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(60 * 60)).await;
                 continue;
             }
 

@@ -1,15 +1,15 @@
 use crate::constants::{PAL_PORT_1, PAL_PORT_2};
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client_api::response::RpcContactInfo;
 use solana_sdk::clock::Slot;
-use solana_sdk::commitment_config::CommitmentConfig;
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::ops::Add;
 use tracing::info;
 
-// contains all paladin
+// contains all paladin leaders for 
 pub struct PalidatorCache {
     pub epoch: u64,
     pub epoch_start_slot: Slot,

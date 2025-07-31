@@ -2,87 +2,46 @@ mod constants;
 mod palidator_cache;
 mod palidator_tracker;
 mod quic;
+mod slot_watchers;
 
-use axum::{
-    extract::Json,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::post,
-    Router,
-};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use crate::slot_watchers::recent_slots::RecentLeaderSlots;
+use crate::slot_watchers::SlotWatcher;
+use anyhow::Context;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_commitment_config::CommitmentConfig;
+use tokio::signal::ctrl_c;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
-use base64::engine::general_purpose::STANDARD as base64_engine;
-use base64::Engine;
-
-#[derive(Debug, Deserialize)]
-struct SendPaladinParams {
-    #[serde(rename = "revertProtection")]
-    revert_protection: bool,
-    #[serde(rename = "enableFallback")]
-    enable_fallback: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    method: String,
-    params: (String, SendPaladinParams),
-    id: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    result: String,
-    id: u64,
-}
-
-async fn handle_json_rpc(Json(req): Json<JsonRpcRequest>) -> impl IntoResponse {
-    if req.method != "sendPaladin" {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Unsupported method", "id": req.id })),
-        );
-    }
-
-    let (base64_tx, options) = req.params;
-
-    let decoded_tx = match base64_engine.decode(&base64_tx) {
-        Ok(tx) => tx,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "Invalid base64", "id": req.id })),
-            );
-        }
-    };
-
-    info!("Received sendPaladin tx ({} bytes)", decoded_tx.len());
-    info!(
-        "Options: revert_protection={}, enable_fallback={}",
-        options.revert_protection, options.enable_fallback
-    );
-
-    let response = JsonRpcResponse {
-        jsonrpc: "2.0".to_string(),
-        result: "ok".to_string(),
-        id: req.id,
-    };
-
-    let response_json = serde_json::to_value(response).unwrap();
-    (StatusCode::OK, Json(response_json))
-}
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let app = Router::new().route("/", post(handle_json_rpc));
-    let addr: std::net::SocketAddr = "0.0.0.0:8080".parse().unwrap();
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let cancel = CancellationToken::new();
+    tokio::spawn({
+        let cancel = cancel.clone();
+        async move {
+            ctrl_c().await.unwrap();
+            info!("Received Ctrl+C, shutting down...");
+            cancel.cancel();
+        }
+    });
 
-    println!("🟢 Listening on http://{}", addr);
-    axum::serve(listener, app).await.unwrap();
+    let grpc_url = vec!["http://grpc:10000".to_string()];
+    let ws_url = vec!["ws://rpc:8900".to_string()];
+    let rpc_url = "http://rpc:8899";
+
+    let rpc = RpcClient::new(rpc_url.to_owned());
+    let estimated_current_slot = rpc
+        .get_slot_with_commitment(CommitmentConfig::processed())
+        .await?;
+    let recent_slots = RecentLeaderSlots::new(estimated_current_slot);
+    let mut slot_watcher_hdl =
+        SlotWatcher::run_slot_watchers(ws_url, grpc_url, recent_slots.clone(), cancel.clone());
+    while !cancel.is_cancelled() {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        println!("latest slot: {}", recent_slots.estimated_current_slot())
+    }
+    slot_watcher_hdl.join().await;
+    Ok(())
 }
