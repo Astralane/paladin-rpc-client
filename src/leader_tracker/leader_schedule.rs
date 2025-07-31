@@ -2,11 +2,10 @@ use crate::constants::{PAL_PORT, PAL_PORT_MEV_PROTECT};
 use crate::leader_tracker::types::PalSocketAddr;
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client_api::response::RpcContactInfo;
 use solana_sdk::clock::Slot;
 use std::collections::{BTreeMap, HashMap};
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::ops::Add;
 use tracing::info;
 

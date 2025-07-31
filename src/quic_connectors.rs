@@ -4,9 +4,11 @@ use lru::LruCache;
 use quinn::{Connection, Endpoint};
 use solana_sdk::slot_history::Slot;
 use std::net::SocketAddr;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 pub struct TransactionInfo {
     pub wire_transaction: Vec<u8>,
@@ -18,19 +20,22 @@ pub struct TransactionBatch {
 }
 pub struct ConnectionWorkerInfo {
     sender: tokio::sync::mpsc::Sender<TransactionBatch>,
-    handle: tokio::task::JoinHandle<()>,
+    revert_protect_sender: tokio::sync::mpsc::Sender<TransactionBatch>,
+    handles: Vec<tokio::task::JoinHandle<()>>,
     cancel: CancellationToken,
 }
 
 impl ConnectionWorkerInfo {
     pub fn new(
         sender: tokio::sync::mpsc::Sender<TransactionBatch>,
-        handle: tokio::task::JoinHandle<()>,
+        revert_protect_sender: tokio::sync::mpsc::Sender<TransactionBatch>,
+        handles: Vec<tokio::task::JoinHandle<()>>,
         cancel: CancellationToken,
     ) -> Self {
         Self {
             sender,
-            handle,
+            revert_protect_sender,
+            handles,
             cancel,
         }
     }
@@ -89,7 +94,7 @@ impl ConnectionScheduler {
             };
 
             let current_slot = leader_tracker.recent_slots.estimated_current_slot();
-            for transaction in transaction_batch.transactions {
+            for transaction in &transaction_batch.transactions {
                 info!(
                     "slot latency between current slot {} and received slot {} is {}",
                     current_slot,
@@ -125,7 +130,7 @@ enum ConnectionState {
 
 pub struct ConnectionWorker {
     endpoint: Arc<Endpoint>,
-    peer: PalSocketAddr,
+    peer: SocketAddr,
     state: ConnectionState,
     channel_size: usize,
     cancel: CancellationToken,
@@ -141,24 +146,40 @@ pub fn spawn_new(
 ) -> ConnectionWorkerInfo {
     let cancel = CancellationToken::new();
     let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
-    let mut connection_worker = ConnectionWorker::new(
-        endpoint,
-        peer,
+    let (revert_protect_sender, revert_protect_receiver) = tokio::sync::mpsc::channel(queue_size);
+    let p3_worker = ConnectionWorker::new(
+        endpoint.clone(),
+        peer.p3_port,
         queue_size,
         receiver,
         max_reconnect_attempts,
         cancel.clone(),
     );
-    let handle = tokio::spawn(async move {
-        connection_worker.run();
-    });
-    ConnectionWorkerInfo::new(sender, handle, cancel)
+    let revert_protect_worker = ConnectionWorker::new(
+        endpoint,
+        peer.revert_protected_port,
+        queue_size,
+        revert_protect_receiver,
+        max_reconnect_attempts,
+        cancel.clone(),
+    );
+
+    let handles = [p3_worker, revert_protect_worker]
+        .into_iter()
+        .map(|mut worker| {
+            tokio::spawn(async move {
+                worker.run().await;
+            })
+        })
+        .collect();
+
+    ConnectionWorkerInfo::new(sender, revert_protect_sender, handles, cancel)
 }
 
 impl ConnectionWorker {
     pub fn new(
         endpoint: Arc<Endpoint>,
-        peer: PalSocketAddr,
+        peer: SocketAddr,
         queue_size: usize,
         receiver: tokio::sync::mpsc::Receiver<TransactionBatch>,
         max_reconnection_attempts: usize,
@@ -167,27 +188,76 @@ impl ConnectionWorker {
         Self {
             endpoint,
             peer,
+            state: ConnectionState::NotSetup,
             channel_size: queue_size,
             receiver,
             max_reconnection_attempts,
             cancel,
         }
     }
-    pub fn run(&mut self) {
-        loop {
-            let batch = tokio::select! {
-                _ = self.cancel.cancelled() => break,
-                batch = self.receiver.recv() => match batch {
-                    None => {
-                        break;
-                    }
-                    Some(batch) => batch
-                }
-            };
+
+    pub async fn run(&mut self) {
+        let cancel = self.cancel.clone();
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                debug!("Cancelled: Shutting down");
+            },
+            _ = self.handle_peer_connection() => {
+                debug!("Connection worker finished");
+            },
         }
     }
 
-    fn create_connection(&mut self, peer: SocketAddr) {
-        let connecting = self.endpoint.connect(peer);
+    async fn handle_peer_connection(&mut self) {
+        const RETRY_SLEEP_INTERVAL: Duration = Duration::from_millis(100);
+        loop {
+            match &self.state {
+                ConnectionState::NotSetup => {
+                    self.create_connection(0).await;
+                },
+                ConnectionState::Active(conn) => {
+                    let batch = match self.receiver.recv().await {
+                        Some(batch) => batch,
+                        None => {
+                            break;
+                        }
+                    };
+                }
+                ConnectionState::Retry(num_reconnects) => {
+                    if *num_reconnects > self.max_reconnection_attempts {
+                        error!("Failed to establish connection: reach max reconnect attempts.");
+                        self.state = ConnectionState::Closing;
+                        continue;
+                    }
+                    sleep(RETRY_SLEEP_INTERVAL).await;
+                    self.create_connection(*num_reconnects).await;
+                }
+                ConnectionState::Closing => {
+                    break;
+                }
+            }
+        }
+    }
+
+    async fn create_connection(&mut self, retry_attempts: usize) {
+        let connect = self.endpoint.connect(self.peer, "paladin-connecting");
+        let connecting = match connect {
+            Ok(connecting) => connecting,
+            Err(e) => {
+                error!("Failed to connect to peer: {:?}", e);
+                self.state = ConnectionState::Retry(retry_attempts + 1);
+                return;
+            }
+        };
+
+        let conn = match connecting.await {
+            Ok(conn) => conn,
+            Err(e) => {
+                error!("Failed to connect to peer: {:?}", e);
+                self.state = ConnectionState::Retry(retry_attempts + 1);
+                return;
+            }
+        };
+        self.state = ConnectionState::Active(conn);
     }
 }

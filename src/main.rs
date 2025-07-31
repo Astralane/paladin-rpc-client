@@ -9,7 +9,6 @@ use crate::quic::quic_client_certificate::QuicClientCertificate;
 use crate::quic::quic_networking::{create_client_config, create_client_endpoint};
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::slot_watchers::SlotWatcher;
-use anyhow::Context;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_commitment_config::CommitmentConfig;
 use solana_sdk::signature::Keypair;

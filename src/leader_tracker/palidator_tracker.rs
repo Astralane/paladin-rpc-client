@@ -3,10 +3,9 @@ use crate::leader_tracker::types::PalSocketAddr;
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::clock::Slot;
 use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::error;
 
 pub struct PalidatorTracker {
     pub recent_slots: RecentLeaderSlots,

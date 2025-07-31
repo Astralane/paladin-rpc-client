@@ -3,8 +3,8 @@ use std::net::{IpAddr, SocketAddr};
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct PalSocketAddr {
-    p3_port: SocketAddr,
-    revert_protected_port: SocketAddr,
+    pub p3_port: SocketAddr,
+    pub revert_protected_port: SocketAddr,
 }
 impl PalSocketAddr {
     pub fn from_ip(ip: IpAddr) -> Self {
