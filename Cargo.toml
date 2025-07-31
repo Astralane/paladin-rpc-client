@@ -10,12 +10,14 @@ serde_json = "1.0"
 
 base64 = "0.22"
 
-solana-client = { version = "2.3.4" }
-solana-sdk = { version = "2.3.1" }
-solana-streamer = { version = "2.3.4" }
-solana-rpc-client-api = { version = "2.3.4" }
-solana-tls-utils = "2.3.4"
+solana-client = { version = "2.3.6" }
+solana-streamer = { version = "2.3.6" }
+solana-rpc-client-api = { version = "2.3.6" }
+solana-tls-utils = "2.3.6"
+solana-tpu-client-next = "2.3.6"
+
 solana-quic-definitions = "2.3.1"
+solana-sdk = { version = "2.3.1" }
 
 solana-commitment-config = "2.2.1"
 yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc.git", tag = "v8.0.0+solana.2.3.3" }
@@ -33,5 +35,6 @@ dashmap = "6.1.0"
 figment = { version = "0.10.19", features = ["env"] }
 serde = { version = "1.0.219", features = ["derive"] }
 dotenvy = "0.15.7"
-thiserror = "1.0.69"
+thiserror = "2.0.12"
 anyhow = "1.0.97"
+lru = "0.16.0"
