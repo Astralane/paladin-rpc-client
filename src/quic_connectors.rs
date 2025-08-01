@@ -413,7 +413,7 @@ pub mod test {
         let ws_url = "ws://rpc:8900";
         let bind = "0.0.0.0:0";
 
-        let identity = Keypair::read_from_file("/root/.config/solana/id.json").unwrap();
+        let identity = Keypair::read_from_file("/Users/nuel/.config/solana/pal.json").unwrap();
         let leader_tracker = StubPalidatorTracker::new("149.248.51.171".parse().unwrap());
         let recent_slots = RecentLeaderSlots::new(10);
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
@@ -439,7 +439,7 @@ pub mod test {
         let wire_transaction = BASE64_STANDARD.decode(encoded_tx).unwrap();
         let tx_batch = (0..1)
             .into_iter()
-            .map(|_| TransactionInfo::new(wire_transaction.clone(), true, 0))
+            .map(|_| TransactionInfo::new(wire_transaction.clone(), false, 0))
             .collect::<Vec<_>>();
 
         info!("Sending transaction batch");
