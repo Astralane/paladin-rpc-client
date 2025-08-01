@@ -1,9 +1,10 @@
 use crate::leader_tracker::leader_schedule::PalidatorSchedule;
-use crate::leader_tracker::types::PaladinSocketAddrs;
+use crate::leader_tracker::types::{pal_socks_from_ip, PaladinSocketAddrs};
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::utils::PalidatorTracker;
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -92,5 +93,28 @@ impl PalidatorTracker for PalidatorTrackerImpl {
 
     fn stop(&mut self) {
         self.task.abort();
+    }
+}
+
+#[cfg(test)]
+pub mod stub_tracker {
+    use super::*;
+    pub struct StubPalidatorTracker(IpAddr);
+
+    impl StubPalidatorTracker {
+        pub fn new(addr: IpAddr) -> Self {
+            Self(addr)
+        }
+    }
+
+    impl PalidatorTracker for StubPalidatorTracker {
+        fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
+            let socks = pal_socks_from_ip(self.0);
+            vec![socks]
+        }
+
+        fn stop(&mut self) {
+            unimplemented!()
+        }
     }
 }

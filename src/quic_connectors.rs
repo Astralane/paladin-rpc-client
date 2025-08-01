@@ -5,6 +5,7 @@ use anyhow::Context;
 use lru::LruCache;
 use quinn::{Connection, Endpoint};
 use solana_sdk::slot_history::Slot;
+use solana_sdk::transaction::VersionedTransaction;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,14 +14,45 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
+#[derive(Clone, Debug)]
 pub struct TransactionInfo {
     pub wire_transaction: Vec<u8>,
     pub revert_protect: bool,
     pub slot_received: Slot,
 }
+
+impl TransactionInfo {
+    pub fn new(wire_transaction: Vec<u8>, revert_protect: bool, slot_received: Slot) -> Self {
+        Self {
+            wire_transaction,
+            revert_protect,
+            slot_received,
+        }
+    }
+
+    pub fn from_versioned_transaction(
+        tx: VersionedTransaction,
+        revert_protect: bool,
+        slot_received: Slot,
+    ) -> Self {
+        let wire_transaction = bincode::serialize(&tx).unwrap();
+        Self {
+            wire_transaction,
+            revert_protect,
+            slot_received,
+        }
+    }
+}
 pub struct TransactionBatch {
     pub transactions: Vec<TransactionInfo>,
 }
+
+impl TransactionBatch {
+    pub fn new(transactions: Vec<TransactionInfo>) -> Self {
+        Self { transactions }
+    }
+}
+
 impl Into<Vec<Vec<u8>>> for TransactionBatch {
     fn into(self) -> Vec<Vec<u8>> {
         self.transactions
@@ -106,6 +138,7 @@ impl ConnectionScheduler {
         max_reconnection_attempts: usize,
         cancel: CancellationToken,
     ) -> Self {
+        debug!("Starting connection scheduler");
         let mut workers_cache = WorkersCache::new(leader_lookahead * 2, cancel.clone());
         loop {
             let transaction_batch = tokio::select! {
@@ -145,11 +178,15 @@ impl ConnectionScheduler {
             // Send txns to appropriate workers
             if let Some(worker) = workers_cache.get(&current_leader[0]) {
                 Self::try_send_to_worker(&current_leader[0], worker, txns);
+            } else {
+                debug!("No worker for current leader: {:?}", current_leader[0]);
             }
 
             //revert protected worker
             if let Some(worker) = workers_cache.get(&current_leader[1]) {
                 Self::try_send_to_worker(&current_leader[1], worker, revert_protected_txns);
+            } else {
+                debug!("No worker for current leader: {:?}", current_leader[1]);
             }
 
             //refresh the cache with new upcoming leaders
@@ -182,6 +219,7 @@ impl ConnectionScheduler {
         worker: &mut ConnectionWorkerInfo,
         batch: Vec<TransactionInfo>,
     ) {
+        debug!("Sending transaction batch to worker: {:?}", peer);
         let batch = batch
             .into_iter()
             .map(|item| item.wire_transaction)
@@ -299,15 +337,18 @@ impl ConnectionWorker {
         loop {
             match &self.state {
                 ConnectionState::NotSetup => {
+                    debug!("conn not setup yet");
                     self.create_connection(0).await;
                 }
                 ConnectionState::Active(conn) => {
+                    debug!("conn active");
                     let batch = match self.receiver.recv().await {
                         Some(batch) => batch,
                         None => {
                             continue;
                         }
                     };
+                    debug!("batch received");
                     self.send_transactions(conn.clone(), batch.into()).await
                 }
                 ConnectionState::Retry(num_reconnects) => {
@@ -346,5 +387,70 @@ impl ConnectionWorker {
             }
         };
         self.state = ConnectionState::Active(conn);
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use crate::leader_tracker::palidator_tracker::stub_tracker::*;
+    use crate::quic::quic_networking::setup_quic_endpoint;
+    use base64::prelude::BASE64_STANDARD;
+    use base64::Engine;
+    use once_cell::sync::OnceCell;
+    use solana_sdk::signature::Keypair;
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    static TRACING: OnceCell<()> = OnceCell::new();
+    fn init_tracing() {
+        TRACING.get_or_init(|| {
+            let subscriber = fmt().with_env_filter(EnvFilter::from_default_env()).init();
+        });
+    }
+    #[tokio::test]
+    pub async fn test_connection_worker() {
+        init_tracing();
+        info!("Starting test");
+        let rpc_url = "http://rpc:8899";
+        let ws_url = "ws://rpc:8900";
+        let bind = "0.0.0.0:0";
+
+        let identity = Keypair::new();
+        let leader_tracker = StubPalidatorTracker::new("149.248.51.171".parse().unwrap());
+        let recent_slots = RecentLeaderSlots::new(10);
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        let cancel = CancellationToken::new();
+        let endpoint =
+            setup_quic_endpoint(bind.parse().unwrap(), identity).expect("Failed to setup endpoint");
+
+        tokio::spawn(async move {
+            let worker = ConnectionScheduler::new(
+                leader_tracker,
+                recent_slots,
+                Arc::new(endpoint),
+                1,
+                receiver,
+                64,
+                5,
+                cancel,
+            )
+            .await;
+        });
+
+        let encoded_tx = "AQ8u+02BWbmWoAp/l5ywboiVfqLvccf0imCVc+UBBOUzRF2n0InBPPWiPZKLuiCIm2XruFl4sjuZQX+Wf0RIsAEBAAED1C+Y6RXlWshcp9Q7xXwA76wBNxlKWPQy3zk0bTZaifYIrbZ5I8Tb2shZFMrMnlo+yQM4KGV+ex41djfeiorzggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXTvopTJh7ISsx99fFL/DNvqXpzmACKWoAIJy+D5pZGkCAgIAAQwCAAAAoIYBAAAAAAACAgAADAIAAABuFAAAAAAAAA==";
+        let wire_transaction = BASE64_STANDARD.decode(encoded_tx).unwrap();
+        let tx_batch = (0..1)
+            .into_iter()
+            .map(|_| TransactionInfo::new(wire_transaction.clone(), false, 0))
+            .collect::<Vec<_>>();
+
+        info!("Sending transaction batch");
+        sender
+            .send(TransactionBatch::new(tx_batch.clone()))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        sender.send(TransactionBatch::new(tx_batch)).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }

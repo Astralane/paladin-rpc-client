@@ -7,7 +7,7 @@ mod utils;
 
 use crate::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
 use crate::quic::quic_client_certificate::QuicClientCertificate;
-use crate::quic::quic_networking::{create_client_config, create_client_endpoint};
+use crate::quic::quic_networking::setup_quic_endpoint;
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::slot_watchers::SlotWatcher;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -49,9 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let mut slot_watcher_hdl =
         SlotWatcher::run_slot_watchers(ws_url, grpc_url, recent_slots.clone(), cancel.clone());
 
-    let client_certificate = Arc::new(QuicClientCertificate::new(&identity));
-    let client_config = create_client_config(client_certificate);
-    let endpoint = Arc::new(create_client_endpoint(bind, client_config)?);
+    let endpoint = Arc::new(setup_quic_endpoint(bind, identity)?);
     let tracker = PalidatorTrackerImpl::new(rpc, recent_slots, endpoint, cancel.clone()).await?;
     slot_watcher_hdl.join().await;
     Ok(())

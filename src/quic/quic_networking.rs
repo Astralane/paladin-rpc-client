@@ -6,12 +6,13 @@ use quinn::{
     TransportConfig,
 };
 use solana_quic_definitions::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT, QUIC_SEND_FAIRNESS};
+use solana_sdk::signature::Keypair;
 use solana_streamer::nonblocking::quic::ALPN_TPU_PROTOCOL_ID;
 use solana_tls_utils::tls_client_config_builder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-pub(crate) fn create_client_config(client_certificate: Arc<QuicClientCertificate>) -> ClientConfig {
+fn create_client_config(client_certificate: Arc<QuicClientCertificate>) -> ClientConfig {
     // adapted from QuicLazyInitializedEndpoint::create_endpoint
     let mut crypto = tls_client_config_builder()
         .with_client_auth_cert(
@@ -39,13 +40,22 @@ pub(crate) fn create_client_config(client_certificate: Arc<QuicClientCertificate
     config
 }
 
-pub(crate) fn create_client_endpoint(
+fn create_client_endpoint(
     bind_addr: SocketAddr,
     client_config: ClientConfig,
 ) -> Result<Endpoint, QuicError> {
     let mut endpoint = Endpoint::client(bind_addr).map_err(IoErrorWithPartialEq::from)?;
     endpoint.set_default_client_config(client_config);
     Ok(endpoint)
+}
+
+pub fn setup_quic_endpoint(
+    bind_addr: SocketAddr,
+    identity: Keypair,
+) -> Result<Endpoint, QuicError> {
+    let client_certificate = Arc::new(QuicClientCertificate::new(&identity));
+    let client_config = create_client_config(client_certificate);
+    create_client_endpoint(bind_addr, client_config)
 }
 
 pub async fn send_data_over_stream(connection: &Connection, data: &[u8]) -> Result<(), QuicError> {
