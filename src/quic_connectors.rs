@@ -141,7 +141,7 @@ impl ConnectionScheduler {
         debug!("Starting connection scheduler");
         let mut workers_cache = WorkersCache::new(leader_lookahead * 2, cancel.clone());
         loop {
-            let transaction_batch = tokio::select! {
+            let batch = tokio::select! {
                 _ = cancel.cancelled() => {
                     debug!("Cancelled: Shutting down");
                     break
@@ -156,7 +156,7 @@ impl ConnectionScheduler {
             };
 
             let current_slot = recent_slots.estimated_current_slot();
-            let transactions = transaction_batch.transactions;
+            let transactions = batch.transactions;
 
             for transaction in &transactions {
                 info!(
@@ -166,31 +166,13 @@ impl ConnectionScheduler {
                     current_slot.saturating_sub(transaction.slot_received)
                 );
             }
-
-            let leaders_list = leader_tracker.next_leaders(leader_lookahead);
-            let Some((current_leader, next_leaders)) = leaders_list.split_first() else {
-                continue;
-            };
-
-            let (txns, revert_protected_txns): (Vec<_>, Vec<_>) =
+            let (transactions, revert_protected_transactions): (Vec<_>, Vec<_>) =
                 transactions.into_iter().partition(|tx| tx.revert_protect);
 
-            // Send txns to appropriate workers
-            if let Some(worker) = workers_cache.get(&current_leader[0]) {
-                Self::try_send_to_worker(&current_leader[0], worker, txns);
-            } else {
-                debug!("No worker for current leader: {:?}", current_leader[0]);
-            }
+            let next_leaders = leader_tracker.next_leaders(leader_lookahead);
 
-            //revert protected worker
-            if let Some(worker) = workers_cache.get(&current_leader[1]) {
-                Self::try_send_to_worker(&current_leader[1], worker, revert_protected_txns);
-            } else {
-                debug!("No worker for current leader: {:?}", current_leader[1]);
-            }
-
-            //refresh the cache with new upcoming leaders
-            for leader in next_leaders {
+            //create connections with the leader list
+            for leader in &next_leaders {
                 for socks in leader.iter() {
                     if workers_cache.contains(socks) {
                         continue;
@@ -208,6 +190,21 @@ impl ConnectionScheduler {
                             }
                         });
                     }
+                }
+            }
+
+            let Some(current_leader) = next_leaders.first() else {
+                continue;
+            };
+
+            // Send txns to appropriate workers
+            for (leader, txns) in [
+                (&current_leader[0], transactions),
+                (&current_leader[1], revert_protected_transactions),
+            ] {
+                match workers_cache.get(leader) {
+                    Some(worker) => Self::try_send_to_worker(leader, worker, txns),
+                    None => debug!("No worker for current leader: {:?}", leader),
                 }
             }
         }
@@ -316,17 +313,17 @@ impl ConnectionWorker {
         for tx in transactions {
             match send_data_over_stream(&connection, &tx).await {
                 Ok(_) => {
-                    info!("Sent transaction");
+                    info!("successfully sent transaction over uni-stream");
                 }
                 Err(e) => {
                     self.state = ConnectionState::Retry(0);
-                    error!("Failed to send transaction: {:?}", e);
+                    error!("Failed to send transaction over uni-stream: {:?}", e);
                 }
             }
         }
         let end = std::time::Instant::now();
         info!(
-            "Sent {} transactions in {} ms",
+            "Sent transactions {} in {} ms",
             tx_len,
             end.duration_since(start).as_millis()
         );
@@ -441,7 +438,7 @@ pub mod test {
         let wire_transaction = BASE64_STANDARD.decode(encoded_tx).unwrap();
         let tx_batch = (0..1)
             .into_iter()
-            .map(|_| TransactionInfo::new(wire_transaction.clone(), false, 0))
+            .map(|_| TransactionInfo::new(wire_transaction.clone(), true, 0))
             .collect::<Vec<_>>();
 
         info!("Sending transaction batch");
@@ -449,8 +446,19 @@ pub mod test {
             .send(TransactionBatch::new(tx_batch.clone()))
             .await
             .unwrap();
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        sender.send(TransactionBatch::new(tx_batch.clone())).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        sender.send(TransactionBatch::new(tx_batch.clone())).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        sender.send(TransactionBatch::new(tx_batch.clone())).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
         sender.send(TransactionBatch::new(tx_batch)).await.unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
+
     }
 }
