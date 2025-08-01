@@ -396,6 +396,7 @@ pub mod test {
     use base64::Engine;
     use once_cell::sync::OnceCell;
     use solana_sdk::signature::Keypair;
+    use solana_sdk::signer::EncodableKey;
     use tracing_subscriber::{fmt, EnvFilter};
 
     static TRACING: OnceCell<()> = OnceCell::new();
@@ -412,7 +413,7 @@ pub mod test {
         let ws_url = "ws://rpc:8900";
         let bind = "0.0.0.0:0";
 
-        let identity = Keypair::new();
+        let identity = Keypair::read_from_file("/root/.config/solana/id.json").unwrap();
         let leader_tracker = StubPalidatorTracker::new("149.248.51.171".parse().unwrap());
         let recent_slots = RecentLeaderSlots::new(10);
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
