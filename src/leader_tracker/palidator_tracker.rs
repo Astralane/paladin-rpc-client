@@ -1,19 +1,20 @@
 use crate::leader_tracker::leader_schedule::PalidatorSchedule;
-use crate::leader_tracker::types::PalSocketAddr;
+use crate::leader_tracker::types::PaladinSocketAddrs;
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
+use crate::utils::PalidatorTracker;
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-pub struct PalidatorTracker {
+pub struct PalidatorTrackerImpl {
     pub recent_slots: RecentLeaderSlots,
     schedule: Arc<RwLock<PalidatorSchedule>>,
     task: tokio::task::JoinHandle<()>,
 }
 
-impl PalidatorTracker {
+impl PalidatorTrackerImpl {
     pub async fn new(
         rpc: Arc<RpcClient>,
         recent_slots: RecentLeaderSlots,
@@ -30,7 +31,7 @@ impl PalidatorTracker {
         })
     }
 
-    pub fn get_closest_leaders(&self, lookout_num: usize) -> Vec<Option<PalSocketAddr>> {
+    pub fn get_closest_leaders(&self, lookout_num: usize) -> Vec<Option<PaladinSocketAddrs>> {
         let current_slot = self.recent_slots.estimated_current_slot();
         self.schedule
             .read()
@@ -78,5 +79,18 @@ impl PalidatorTracker {
             *cache = updated_cache;
         }
         Ok(())
+    }
+}
+
+impl PalidatorTracker for PalidatorTrackerImpl {
+    fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
+        self.get_closest_leaders(lookahead_leaders)
+            .into_iter()
+            .filter_map(|addr| addr)
+            .collect()
+    }
+
+    fn stop(&mut self) {
+        self.task.abort();
     }
 }

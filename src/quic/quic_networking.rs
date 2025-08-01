@@ -1,7 +1,9 @@
 use crate::quic::error::{IoErrorWithPartialEq, QuicError};
 use crate::quic::quic_client_certificate::QuicClientCertificate;
+use futures_util::TryFutureExt;
 use quinn::{
-    crypto::rustls::QuicClientConfig, ClientConfig, Endpoint, IdleTimeout, TransportConfig,
+    crypto::rustls::QuicClientConfig, ClientConfig, Connection, Endpoint, IdleTimeout,
+    TransportConfig,
 };
 use solana_quic_definitions::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT, QUIC_SEND_FAIRNESS};
 use solana_streamer::nonblocking::quic::ALPN_TPU_PROTOCOL_ID;
@@ -44,4 +46,11 @@ pub(crate) fn create_client_endpoint(
     let mut endpoint = Endpoint::client(bind_addr).map_err(IoErrorWithPartialEq::from)?;
     endpoint.set_default_client_config(client_config);
     Ok(endpoint)
+}
+
+pub async fn send_data_over_stream(connection: &Connection, data: &[u8]) -> Result<(), QuicError> {
+    let mut send_stream = connection.open_uni().await?;
+    send_stream.write_all(data).await.map_err(QuicError::from)?;
+    // Stream will be finished when dropped. Finishing here explicitly is a noop.
+    Ok(())
 }

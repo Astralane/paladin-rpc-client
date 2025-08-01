@@ -3,8 +3,9 @@ mod leader_tracker;
 mod quic;
 mod quic_connectors;
 mod slot_watchers;
+mod utils;
 
-use crate::leader_tracker::palidator_tracker::PalidatorTracker;
+use crate::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
 use crate::quic::quic_client_certificate::QuicClientCertificate;
 use crate::quic::quic_networking::{create_client_config, create_client_endpoint};
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
@@ -51,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let client_certificate = Arc::new(QuicClientCertificate::new(&identity));
     let client_config = create_client_config(client_certificate);
     let endpoint = Arc::new(create_client_endpoint(bind, client_config)?);
-    let tracker = PalidatorTracker::new(rpc, recent_slots, endpoint, cancel.clone()).await?;
+    let tracker = PalidatorTrackerImpl::new(rpc, recent_slots, endpoint, cancel.clone()).await?;
     slot_watcher_hdl.join().await;
     Ok(())
 }

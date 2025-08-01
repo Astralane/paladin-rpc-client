@@ -1,16 +1,11 @@
 use crate::constants::{PAL_PORT, PAL_PORT_MEV_PROTECT};
 use std::net::{IpAddr, SocketAddr};
 
-#[derive(Debug, Hash, PartialEq, Eq)]
-pub struct PalSocketAddr {
-    pub p3_port: SocketAddr,
-    pub revert_protected_port: SocketAddr,
-}
-impl PalSocketAddr {
-    pub fn from_ip(ip: IpAddr) -> Self {
-        Self {
-            p3_port: SocketAddr::new(ip, PAL_PORT),
-            revert_protected_port: SocketAddr::new(ip, PAL_PORT_MEV_PROTECT),
-        }
-    }
+// [p3 port, revert_protected_port]
+pub type PaladinSocketAddrs = [SocketAddr; 2];
+pub fn pal_socks_from_ip(ip: IpAddr) -> PaladinSocketAddrs {
+    [
+        SocketAddr::new(ip, PAL_PORT),
+        SocketAddr::new(ip, PAL_PORT_MEV_PROTECT),
+    ]
 }

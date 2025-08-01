@@ -1,5 +1,5 @@
 use crate::constants::{PAL_PORT, PAL_PORT_MEV_PROTECT};
-use crate::leader_tracker::types::PalSocketAddr;
+use crate::leader_tracker::types::{pal_socks_from_ip, PaladinSocketAddrs};
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::RpcContactInfo;
@@ -121,7 +121,7 @@ impl PalidatorSchedule {
         &self,
         curr_slot: Slot,
         lookout_num: usize,
-    ) -> Vec<Option<PalSocketAddr>> {
+    ) -> Vec<Option<PaladinSocketAddrs>> {
         self.slot_schedule
             .range(curr_slot..)
             .take(lookout_num)
@@ -129,7 +129,7 @@ impl PalidatorSchedule {
                 let socks = contact
                     .tpu_quic
                     .as_ref()
-                    .map(|addr| PalSocketAddr::from_ip(addr.ip()));
+                    .map(|addr| pal_socks_from_ip(addr.ip()));
                 socks
             })
             .collect()
