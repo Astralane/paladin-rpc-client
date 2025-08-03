@@ -11,11 +11,12 @@ serde_json = "1.0"
 base64 = "0.22"
 
 solana-client = { version = "2.3.6" }
-solana-streamer = { version = "2.3.6" }
 solana-rpc-client-api = { version = "2.3.6" }
 solana-tls-utils = "2.3.6"
+solana-streamer = { git = "https://github.com/paladin-bladesmith/paladin-solana.git", tag = "v2.3.6-paladin"  }
+paladin-lockup-program = { git = "https://github.com/paladin-bladesmith/paladin-solana.git", tag = "v2.3.6-paladin" }
 solana-tpu-client-next = "2.3.6"
-
+spl-discriminator = "0.4.1"
 solana-quic-definitions = "2.3.1"
 solana-sdk = { version = "2.3.1" }
 
@@ -26,6 +27,7 @@ yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc.gi
 rustls = { version = "0.23.15", default-features = false }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+itertools = "0.14.0"
 axum = { version = "0.8.1", features = ["macros", "tower-log"] }
 quinn = "0.11.6"
 tokio-util = "0.7.14"
@@ -39,6 +41,8 @@ thiserror = "2.0.12"
 anyhow = "1.0.97"
 lru = "0.16.0"
 bincode = "1.3.3"
+log = "0.4.27"
+bytemuck = "1.23.1"
 
 [dev-dependencies]
 once_cell = "1.21.3"

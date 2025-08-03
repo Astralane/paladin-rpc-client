@@ -4,6 +4,7 @@ mod quic;
 mod quic_connectors;
 mod slot_watchers;
 mod utils;
+mod types;
 
 use crate::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
 use crate::quic::quic_client_certificate::QuicClientCertificate;
