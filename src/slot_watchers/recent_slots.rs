@@ -8,13 +8,13 @@ const MAX_SLOT_SKIP_DISTANCE: u64 = 48;
 #[derive(Clone, Debug)]
 pub struct RecentLeaderSlots(Arc<RwLock<VecDeque<Slot>>>);
 impl RecentLeaderSlots {
-    pub(crate) fn new(current_slot: Slot) -> Self {
+    pub fn new(current_slot: Slot) -> Self {
         let mut recent_slots = VecDeque::new();
         recent_slots.push_back(current_slot);
         Self(Arc::new(RwLock::new(recent_slots)))
     }
 
-    pub(crate) fn record_slot(&self, current_slot: Slot) {
+    pub fn record_slot(&self, current_slot: Slot) {
         let mut recent_slots = self.0.write().unwrap();
         recent_slots.push_back(current_slot);
         // 12 recent slots should be large enough to avoid a misbehaving
@@ -25,7 +25,7 @@ impl RecentLeaderSlots {
     }
 
     // Estimate the current slot from recent slot notifications.
-    pub(crate) fn estimated_current_slot(&self) -> Slot {
+    pub fn estimated_current_slot(&self) -> Slot {
         let mut recent_slots: Vec<Slot> = self.0.read().unwrap().iter().cloned().collect();
         assert!(!recent_slots.is_empty());
         recent_slots.sort_unstable();

@@ -2611,6 +2611,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bytemuck",
+ "crossbeam-channel",
  "dashmap 6.1.0",
  "dotenvy",
  "figment",

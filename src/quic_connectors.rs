@@ -158,26 +158,26 @@ impl ConnectionScheduler {
 
             let current_slot = recent_slots.estimated_current_slot();
             let transactions = batch.transactions;
-
             for transaction in &transactions {
-                info!(
-                    "slot latency between current slot {} and received slot {} is {}",
-                    current_slot,
-                    transaction.slot_received,
-                    current_slot.saturating_sub(transaction.slot_received)
-                );
+                // info!(
+                //     "slot latency between current slot {} and received slot {} is {}",
+                //     current_slot,
+                //     transaction.slot_received,
+                //     current_slot.saturating_sub(transaction.slot_received)
+                // );
             }
-            let (transactions, revert_protected_transactions): (Vec<_>, Vec<_>) =
+            let (revert_protected_transactions, transactions): (Vec<_>, Vec<_>) =
                 transactions.into_iter().partition(|tx| tx.revert_protect);
 
             let next_leaders = leader_tracker.next_leaders(leader_lookahead);
 
             //create connections with the leader list
             for leader in &next_leaders {
-                for socks in leader.iter() {
+                for socks in leader.iter(){
                     if workers_cache.contains(socks) {
                         continue;
                     }
+                    debug!("Creating new worker for leader: {:?}", socks);
                     let worker = spawn_new(
                         endpoint.clone(),
                         *socks,
@@ -314,7 +314,6 @@ impl ConnectionWorker {
         for tx in transactions {
             match send_data_over_stream(&connection, &tx).await {
                 Ok(_) => {
-                    info!("successfully sent transaction over uni-stream");
                 }
                 Err(e) => {
                     self.state = ConnectionState::Retry(0);
@@ -324,7 +323,7 @@ impl ConnectionWorker {
         }
         let duration = start.elapsed();
         debug!(
-            "total time to stream {} transactions: {:?}",
+            "total time to stream {} transactions: {:?} ms",
             tx_len,
             duration.as_millis()
         );
@@ -390,159 +389,7 @@ impl ConnectionWorker {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::constants::POOL_KEY;
-    use crate::leader_tracker::palidator_tracker::stub_tracker::*;
-    use crate::quic::quic_networking::setup_quic_endpoint;
-    use crate::utils::{get_stakes, try_deserialize_lockup_pool};
-    use base64::prelude::BASE64_STANDARD;
-    use base64::Engine;
-    use log::warn;
-    use once_cell::sync::OnceCell;
-    use solana_client::nonblocking::rpc_client::RpcClient;
-    use solana_quic_definitions::{
-        QUIC_MAX_STAKED_CONCURRENT_STREAMS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
-        QUIC_MIN_STAKED_CONCURRENT_STREAMS, QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
-    };
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_sdk::signer::EncodableKey;
-    use solana_streamer::nonblocking::quic::ConnectionPeerType;
-    use solana_streamer::streamer::StakedNodes;
-    use std::collections::HashMap;
-    use std::sync::RwLock;
-    use solana_streamer::quic::{QuicServerParams, QuicVariant};
-    use tokio::task::id;
-    use itertools::Itertools;
-    use solana_streamer::nonblocking::stream_throttle::P3_PER_SECOND;
-    use tracing_subscriber::{fmt, EnvFilter};
 
-    static TRACING: OnceCell<()> = OnceCell::new();
-    fn init_tracing() {
-        TRACING.get_or_init(|| {
-            let subscriber = fmt().with_env_filter(EnvFilter::from_default_env()).init();
-        });
-    }
 
-    pub fn compute_max_allowed_uni_streams(
-        peer_type: ConnectionPeerType,
-        total_stake: u64,
-    ) -> usize {
-        match peer_type {
-            ConnectionPeerType::Staked(peer_stake)
-            | ConnectionPeerType::P3(peer_stake)
-            | ConnectionPeerType::Mev(peer_stake) => {
-                // No checked math for f64 type. So let's explicitly check for 0 here
-                if total_stake == 0 || peer_stake > total_stake {
-                    warn!(
-                        "Invalid stake values: peer_stake: {:?}, total_stake: {:?}",
-                        peer_stake, total_stake,
-                    );
 
-                    QUIC_MIN_STAKED_CONCURRENT_STREAMS
-                } else {
-                    let delta = (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS
-                        - QUIC_MIN_STAKED_CONCURRENT_STREAMS)
-                        as f64;
-
-                    (((peer_stake as f64 / total_stake as f64) * delta) as usize
-                        + QUIC_MIN_STAKED_CONCURRENT_STREAMS)
-                        .clamp(
-                            QUIC_MIN_STAKED_CONCURRENT_STREAMS,
-                            QUIC_MAX_STAKED_CONCURRENT_STREAMS,
-                        )
-                }
-            }
-            ConnectionPeerType::Unstaked => QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
-        }
-    }
-
-    fn calculate_stake_stats(
-        stakes: &Arc<HashMap<Pubkey, u64>>,
-        overrides: &HashMap<Pubkey, u64>,
-    ) -> (u64, u64, u64) {
-        let values = stakes
-            .iter()
-            .filter(|(pubkey, _)| !overrides.contains_key(pubkey))
-            .map(|(_, &stake)| stake)
-            .chain(overrides.values().copied())
-            .filter(|&stake| stake > 0);
-        let total_stake = values.clone().sum();
-        let (min_stake, max_stake) = values.minmax().into_option().unwrap_or_default();
-        (total_stake, min_stake, max_stake)
-    }
-
-    #[tokio::test]
-    pub async fn test_connection_worker() {
-        init_tracing();
-        info!("Starting test");
-        let rpc_url = "http://rpc:8899";
-        let ws_url = "ws://rpc:8900";
-        let bind = "0.0.0.0:0";
-        let rpc = RpcClient::new(rpc_url.to_string());
-        let identity = Keypair::read_from_file("/Users/nuel/.config/solana/pal.json").unwrap();
-        let pubkey = identity.pubkey();
-        info!("identity pubkey: {:?}", pubkey);
-
-        let account = rpc.get_account_data(&POOL_KEY).await.unwrap();
-        let lookup_pool = try_deserialize_lockup_pool(&account).unwrap();
-        let stakes = Arc::new(get_stakes(&lookup_pool));
-        let (total_stake, min_stake, max_stake) = calculate_stake_stats(&stakes, &HashMap::new());
-        let staked_nodes = StakedNodes::new(stakes.clone(), HashMap::new());
-        let our_stake = stakes.get(&pubkey).unwrap();
-
-        info!("our stake: {:?}", our_stake);
-        info!("total stake, min_stake, max_stake : {:?}", (total_stake, min_stake, max_stake));
-        let max_uni_streams = compute_max_allowed_uni_streams(
-            ConnectionPeerType::P3(*our_stake),
-            staked_nodes.total_stake(),
-        );
-        let max_mev_uni_stream = compute_max_allowed_uni_streams(ConnectionPeerType::Mev(*our_stake), staked_nodes.total_stake());
-        let stake_ratio = *our_stake as f64 / total_stake as f64;
-        let some_value = stake_ratio >= 1.0 / P3_PER_SECOND as f64;
-        info!("max uni streams: {:?}", max_uni_streams);
-        info!("max_mev_uni_stream: {:?}", max_mev_uni_stream);
-        info!("stake ratio: {:?}", stake_ratio);
-        info!("some value: {:?}", some_value);
-
-        let leader_tracker = StubPalidatorTracker::new("149.248.51.171".parse().unwrap());
-        let recent_slots = RecentLeaderSlots::new(10);
-        let (sender, receiver) = tokio::sync::mpsc::channel::<TransactionBatch>(10);
-        let cancel = CancellationToken::new();
-        let endpoint =
-            setup_quic_endpoint(bind.parse().unwrap(), identity).expect("Failed to setup endpoint");
-
-        let [sock1, sock2] = leader_tracker.next_leaders(1)[0];
-        let connecting = endpoint.connect(sock1, "test").unwrap();
-        let connection = connecting.await.unwrap();
-        info!("connection established");
-
-        // tokio::spawn(async move {
-        //     let worker = ConnectionScheduler::new(
-        //         leader_tracker,
-        //         recent_slots,
-        //         Arc::new(endpoint),
-        //         1,
-        //         receiver,
-        //         64,
-        //         5,
-        //         cancel,
-        //     )
-        //     .await;
-        // });
-
-        let encoded_tx = "AQ8u+02BWbmWoAp/l5ywboiVfqLvccf0imCVc+UBBOUzRF2n0InBPPWiPZKLuiCIm2XruFl4sjuZQX+Wf0RIsAEBAAED1C+Y6RXlWshcp9Q7xXwA76wBNxlKWPQy3zk0bTZaifYIrbZ5I8Tb2shZFMrMnlo+yQM4KGV+ex41djfeiorzggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXTvopTJh7ISsx99fFL/DNvqXpzmACKWoAIJy+D5pZGkCAgIAAQwCAAAAoIYBAAAAAAACAgAADAIAAABuFAAAAAAAAA==";
-        let wire_transaction = BASE64_STANDARD.decode(encoded_tx).unwrap();
-        let tx_batch = (0..1)
-            .into_iter()
-            .map(|_| TransactionInfo::new(wire_transaction.clone(), false, 0))
-            .collect::<Vec<_>>();
-
-        info!("Sending transaction batch");
-        let batch = TransactionBatch::new(tx_batch);
-        for i in 0..5 {
-            info!("Sending batch {}", i);
-            send_data_over_stream(&connection, &wire_transaction).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-    }
 }

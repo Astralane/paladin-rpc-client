@@ -96,7 +96,6 @@ impl PalidatorTracker for PalidatorTrackerImpl {
     }
 }
 
-#[cfg(test)]
 pub mod stub_tracker {
     use super::*;
     pub struct StubPalidatorTracker(IpAddr);
@@ -106,7 +105,6 @@ pub mod stub_tracker {
             Self(addr)
         }
     }
-
     impl PalidatorTracker for StubPalidatorTracker {
         fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
             let socks = pal_socks_from_ip(self.0);
