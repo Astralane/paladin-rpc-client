@@ -173,7 +173,7 @@ impl ConnectionScheduler {
 
             //create connections with the leader list
             for leader in &next_leaders {
-                for socks in leader.iter(){
+                for socks in leader.iter() {
                     if workers_cache.contains(socks) {
                         continue;
                     }
@@ -313,8 +313,7 @@ impl ConnectionWorker {
         let tx_len = transactions.len();
         for tx in transactions {
             match send_data_over_stream(&connection, &tx).await {
-                Ok(_) => {
-                }
+                Ok(_) => {}
                 Err(e) => {
                     self.state = ConnectionState::Retry(0);
                     error!("Failed to send transaction over uni-stream: {:?}", e);
@@ -389,7 +388,4 @@ impl ConnectionWorker {
 #[cfg(test)]
 pub mod test {
     use super::*;
-
-
-
 }

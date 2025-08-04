@@ -15,6 +15,7 @@ use solana_quic_definitions::{
     QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO, QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
     QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
 };
+use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::signer::EncodableKey;
@@ -29,7 +30,6 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use solana_sdk::pubkey;
 use tokio::task::id;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -237,9 +237,13 @@ pub async fn run_test_default_server() {
         (total_stake, min_stake, max_stake)
     );
 
-
     let doggo_key = pubkey!("Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM");
-    let our_stake = *shared_staked_nodes.read().unwrap().stakes.get(&doggo_key).unwrap();
+    let our_stake = *shared_staked_nodes
+        .read()
+        .unwrap()
+        .stakes
+        .get(&doggo_key)
+        .unwrap();
     let peer_type = ConnectionPeerType::Staked(our_stake);
     let max_uni_streams = compute_max_allowed_uni_streams(
         peer_type,
