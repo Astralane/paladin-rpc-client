@@ -21,7 +21,7 @@ use tracing::info;
 
 #[derive(Deserialize, Debug)]
 struct Config {
-    leader_look_ahead: u64,
+    leader_look_ahead: usize,
     rpc_address: SocketAddr,
     max_slot_offset: i32,
     identity_paths: Vec<String>,
@@ -29,6 +29,10 @@ struct Config {
     ws_urls: Vec<String>,
     grpc_urls: Vec<String>,
     quic_bind_address: SocketAddr,
+    quic_max_reconnection_attempts: usize,
+    quic_txn_max_batch_size: usize,
+    quic_worker_queue_size: usize,
+    auction_interval_ms: u64,
 }
 
 #[tokio::main]
@@ -81,10 +85,10 @@ async fn main() -> anyhow::Result<()> {
                 leader_tracker.clone(),
                 recent_slots.clone(),
                 endpoint.clone(),
-                1,
+                config.leader_look_ahead,
                 receiver,
-                128,
-                5,
+                config.quic_max_reconnection_attempts,
+                config.quic_max_reconnection_attempts,
                 cancel.clone(),
             );
             let task = tokio::spawn(async move { connection_worker.run().await });
@@ -98,12 +102,12 @@ async fn main() -> anyhow::Result<()> {
     let (verified_txns_sender, verified_txns_receiver) = crossbeam_channel::unbounded();
 
     let mut forward_and_auction_stage = AuctionAndForwardStage::spawn_new(
-        Duration::from_millis(50),
+        Duration::from_millis(config.auction_interval_ms),
         verified_txns_receiver,
         tpu_packet_sender,
         None,
         cancel.clone(),
-        10,
+        config.quic_txn_max_batch_size,
         1,
     );
 

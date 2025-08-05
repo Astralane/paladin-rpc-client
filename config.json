@@ -12,5 +12,9 @@
   "grpc_urls": [
     "http://grpc:10000"
   ],
-  "quic_bind_address": "0.0.0.0:0"
+  "quic_bind_address": "0.0.0.0:0",
+  "quic_max_reconnection_attempts": 5,
+  "quic_txn_max_batch_size": 100,
+  "quic_worker_queue_size": 512,
+  "auction_interval_ms": 50
 }
