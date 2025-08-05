@@ -1,7 +1,6 @@
 use crate::quic::error::{IoErrorWithPartialEq, QuicError};
 use crate::quic::quic_client_certificate::QuicClientCertificate;
 use futures_util::TryFutureExt;
-use log::info;
 use quinn::{
     crypto::rustls::QuicClientConfig, ClientConfig, Connection, Endpoint, IdleTimeout,
     TransportConfig,
@@ -52,9 +51,9 @@ fn create_client_endpoint(
 
 pub fn setup_quic_endpoint(
     bind_addr: SocketAddr,
-    identity: Keypair,
+    identity: &Keypair,
 ) -> Result<Endpoint, QuicError> {
-    let client_certificate = Arc::new(QuicClientCertificate::new(&identity));
+    let client_certificate = Arc::new(QuicClientCertificate::new(identity));
     let client_config = create_client_config(client_certificate);
     create_client_endpoint(bind_addr, client_config)
 }

@@ -12,7 +12,6 @@ use tracing::error;
 pub struct PalidatorTrackerImpl {
     pub recent_slots: RecentLeaderSlots,
     schedule: Arc<RwLock<PalidatorSchedule>>,
-    task: tokio::task::JoinHandle<()>,
 }
 
 impl PalidatorTrackerImpl {
@@ -21,15 +20,36 @@ impl PalidatorTrackerImpl {
         recent_slots: RecentLeaderSlots,
         endpoint: Arc<Endpoint>,
         cancel: CancellationToken,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<(Self, tokio::task::JoinHandle<()>)> {
         let schedule = PalidatorSchedule::load_latest_by_quic_connect(&rpc, &endpoint).await?;
         let schedule = Arc::new(RwLock::new(schedule));
         let task = tokio::spawn(Self::run_updater(rpc, endpoint, schedule.clone(), cancel));
-        Ok(Self {
-            recent_slots,
-            schedule,
+        Ok((
+            Self {
+                recent_slots,
+                schedule,
+            },
             task,
-        })
+        ))
+    }
+
+    pub fn next_paladin_slot(&self) -> Option<u64> {
+        let current_slot = self.recent_slots.estimated_current_slot();
+        self.schedule
+            .read()
+            .unwrap()
+            .slot_schedule
+            .range(current_slot..)
+            .next()
+            .map(|(slot, _)| *slot)
+    }
+    pub fn is_paladin_slot(&self, slot: u64) -> bool {
+        self.schedule
+            .read()
+            .unwrap()
+            .slot_schedule
+            .get(&slot)
+            .is_some()
     }
 
     pub fn get_closest_leaders(&self, lookout_num: usize) -> Vec<Option<PaladinSocketAddrs>> {
@@ -38,10 +58,6 @@ impl PalidatorTrackerImpl {
             .read()
             .unwrap()
             .get_next_palidator_leader(current_slot, lookout_num)
-    }
-
-    pub async fn join(self) {
-        self.task.await.unwrap();
     }
 
     //TODO: we need to reload the schedule when epoch changes
@@ -90,10 +106,6 @@ impl PalidatorTracker for PalidatorTrackerImpl {
             .filter_map(|addr| addr)
             .collect()
     }
-
-    fn stop(&mut self) {
-        self.task.abort();
-    }
 }
 
 pub mod stub_tracker {
@@ -109,10 +121,6 @@ pub mod stub_tracker {
         fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
             let socks = pal_socks_from_ip(self.0);
             vec![socks]
-        }
-
-        fn stop(&mut self) {
-            unimplemented!()
         }
     }
 }

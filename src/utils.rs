@@ -1,19 +1,19 @@
 use crate::leader_tracker::types::PaladinSocketAddrs;
+use auto_impl::auto_impl;
 use paladin_lockup_program::state::LockupPool;
 use solana_sdk::pubkey::Pubkey;
 use spl_discriminator::SplDiscriminate;
 use std::collections::HashMap;
 
+#[auto_impl(Arc)]
 pub trait PalidatorTracker {
     fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs>;
-    fn stop(&mut self);
 }
 
 pub fn try_deserialize_lockup_pool(data: &[u8]) -> Option<&LockupPool> {
     if data.len() < 8 || &data[0..8] != LockupPool::SPL_DISCRIMINATOR.as_slice() {
         return None;
     }
-
     bytemuck::try_from_bytes::<LockupPool>(data).ok()
 }
 

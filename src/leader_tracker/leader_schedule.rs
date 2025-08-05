@@ -13,7 +13,9 @@ use tracing::info;
 pub struct PalidatorSchedule {
     pub epoch: u64,
     pub epoch_start_slot: Slot,
+    // contact info of all palidators
     pub palidators: Vec<RpcContactInfo>,
+    // palidator slots and contact info
     pub slot_schedule: BTreeMap<Slot, RpcContactInfo>,
 }
 
@@ -95,7 +97,7 @@ impl PalidatorSchedule {
 
     async fn try_connect(endpoint: &Endpoint, node: &RpcContactInfo) -> Option<String> {
         let key = node.pubkey.clone();
-        let ip = node.tpu_quic?.ip();
+        let ip = node.gossip?.ip();
 
         for port in [PAL_PORT, PAL_PORT_MEV_PROTECT] {
             let addr = SocketAddr::new(ip, port);
@@ -125,9 +127,9 @@ impl PalidatorSchedule {
         self.slot_schedule
             .range(curr_slot..)
             .take(lookout_num)
-            .map(|(_, contact)| {
+            .map(|(slot, contact)| {
                 let socks = contact
-                    .tpu_quic
+                    .gossip
                     .as_ref()
                     .map(|addr| pal_socks_from_ip(addr.ip()));
                 socks

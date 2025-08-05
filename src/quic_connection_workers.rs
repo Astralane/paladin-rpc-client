@@ -2,9 +2,9 @@ use crate::quic::quic_networking::send_data_over_stream;
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::utils::PalidatorTracker;
 use anyhow::Context;
+use bytes::Bytes;
 use lru::LruCache;
 use quinn::{Connection, Endpoint};
-use solana_sdk::slot_history::Slot;
 use solana_sdk::transaction::VersionedTransaction;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -12,66 +12,48 @@ use std::time::Duration;
 use tokio::task::JoinError;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
-pub struct TransactionInfo {
-    pub wire_transaction: Vec<u8>,
+pub struct PaladinPacket {
+    //transaction data
+    pub data: Bytes,
     pub revert_protect: bool,
-    pub slot_received: Slot,
 }
 
-impl TransactionInfo {
-    pub fn new(wire_transaction: Vec<u8>, revert_protect: bool, slot_received: Slot) -> Self {
+impl PaladinPacket {
+    pub fn new(data: Vec<u8>, revert_protect: bool) -> Self {
         Self {
-            wire_transaction,
+            data: Bytes::from(data),
             revert_protect,
-            slot_received,
         }
     }
 
-    pub fn from_versioned_transaction(
-        tx: VersionedTransaction,
-        revert_protect: bool,
-        slot_received: Slot,
-    ) -> Self {
-        let wire_transaction = bincode::serialize(&tx).unwrap();
+    pub fn from_bytes(data: Bytes, revert_protect: bool) -> Self {
         Self {
-            wire_transaction,
+            data,
             revert_protect,
-            slot_received,
         }
     }
-}
-#[derive(Clone, Debug)]
-pub struct TransactionBatch {
-    pub transactions: Vec<TransactionInfo>,
-}
 
-impl TransactionBatch {
-    pub fn new(transactions: Vec<TransactionInfo>) -> Self {
-        Self { transactions }
-    }
-}
-
-impl Into<Vec<Vec<u8>>> for TransactionBatch {
-    fn into(self) -> Vec<Vec<u8>> {
-        self.transactions
-            .into_iter()
-            .map(|item| item.wire_transaction)
-            .collect::<Vec<_>>()
+    pub fn from_versioned_transaction(tx: VersionedTransaction, revert_protect: bool) -> Self {
+        let wire_transaction = Bytes::from(bincode::serialize(&tx).unwrap());
+        Self {
+            data: wire_transaction,
+            revert_protect,
+        }
     }
 }
 
 pub struct ConnectionWorkerInfo {
-    sender: tokio::sync::mpsc::Sender<Vec<Vec<u8>>>,
+    sender: tokio::sync::mpsc::Sender<Vec<Bytes>>,
     handle: tokio::task::JoinHandle<()>,
     cancel: CancellationToken,
 }
 
 impl ConnectionWorkerInfo {
     pub fn new(
-        sender: tokio::sync::mpsc::Sender<Vec<Vec<u8>>>,
+        sender: tokio::sync::mpsc::Sender<Vec<Bytes>>,
         handle: tokio::task::JoinHandle<()>,
         cancel: CancellationToken,
     ) -> Self {
@@ -82,7 +64,7 @@ impl ConnectionWorkerInfo {
         }
     }
 
-    pub fn try_send_transaction_batch(&self, batch: Vec<Vec<u8>>) -> anyhow::Result<()> {
+    pub fn try_send_transaction_batch(&self, batch: Vec<Bytes>) -> anyhow::Result<()> {
         self.sender
             .try_send(batch)
             .context("Failed to send transaction batch")?;
@@ -126,28 +108,53 @@ impl WorkersCache {
     }
 }
 
-pub struct ConnectionScheduler;
+pub struct ConnectionScheduler<T> {
+    leader_tracker: T,
+    recent_slots: RecentLeaderSlots,
+    endpoint: Arc<Endpoint>,
+    leader_lookahead: usize,
+    tx_receiver: tokio::sync::mpsc::Receiver<Vec<PaladinPacket>>,
+    worker_queue_size: usize,
+    max_reconnection_attempts: usize,
+    cancel: CancellationToken,
+}
 
-impl ConnectionScheduler {
-    pub async fn new<T: PalidatorTracker>(
+impl<T> ConnectionScheduler<T>
+where
+    T: PalidatorTracker,
+{
+    pub fn new(
         leader_tracker: T,
         recent_slots: RecentLeaderSlots,
         endpoint: Arc<Endpoint>,
         leader_lookahead: usize,
-        mut tx_receiver: tokio::sync::mpsc::Receiver<TransactionBatch>,
+        tx_receiver: tokio::sync::mpsc::Receiver<Vec<PaladinPacket>>,
         worker_queue_size: usize,
         max_reconnection_attempts: usize,
         cancel: CancellationToken,
     ) -> Self {
+        Self {
+            leader_tracker,
+            recent_slots,
+            endpoint,
+            leader_lookahead,
+            tx_receiver,
+            worker_queue_size,
+            max_reconnection_attempts,
+            cancel,
+        }
+    }
+
+    pub async fn run(&mut self) {
         debug!("Starting connection scheduler");
-        let mut workers_cache = WorkersCache::new(leader_lookahead * 2, cancel.clone());
+        let mut workers_cache = WorkersCache::new(self.leader_lookahead * 2, self.cancel.clone());
         loop {
-            let batch = tokio::select! {
-                _ = cancel.cancelled() => {
+            let packet_batch = tokio::select! {
+                _ = self.cancel.cancelled() => {
                     debug!("Cancelled: Shutting down");
                     break
                 },
-                batch = tx_receiver.recv() => match batch {
+                batch = self.tx_receiver.recv() => match batch {
                     Some(batch) => batch,
                     None => {
                         // sender has been dropped
@@ -156,20 +163,11 @@ impl ConnectionScheduler {
                 },
             };
 
-            let current_slot = recent_slots.estimated_current_slot();
-            let transactions = batch.transactions;
-            for transaction in &transactions {
-                // info!(
-                //     "slot latency between current slot {} and received slot {} is {}",
-                //     current_slot,
-                //     transaction.slot_received,
-                //     current_slot.saturating_sub(transaction.slot_received)
-                // );
-            }
+            let current_slot = self.recent_slots.estimated_current_slot();
             let (revert_protected_transactions, transactions): (Vec<_>, Vec<_>) =
-                transactions.into_iter().partition(|tx| tx.revert_protect);
+                packet_batch.into_iter().partition(|tx| tx.revert_protect);
 
-            let next_leaders = leader_tracker.next_leaders(leader_lookahead);
+            let next_leaders = self.leader_tracker.next_leaders(self.leader_lookahead);
 
             //create connections with the leader list
             for leader in &next_leaders {
@@ -179,10 +177,10 @@ impl ConnectionScheduler {
                     }
                     debug!("Creating new worker for leader: {:?}", socks);
                     let worker = spawn_new(
-                        endpoint.clone(),
+                        self.endpoint.clone(),
                         *socks,
-                        worker_queue_size,
-                        max_reconnection_attempts,
+                        self.worker_queue_size,
+                        self.max_reconnection_attempts,
                     );
                     if let Some((sock, worker)) = workers_cache.push(*socks, worker) {
                         tokio::spawn(async move {
@@ -209,19 +207,15 @@ impl ConnectionScheduler {
                 }
             }
         }
-        Self {}
     }
 
     fn try_send_to_worker(
         peer: &SocketAddr,
         worker: &mut ConnectionWorkerInfo,
-        batch: Vec<TransactionInfo>,
+        batch: Vec<PaladinPacket>,
     ) {
         debug!("Sending transaction batch to worker: {:?}", peer);
-        let batch = batch
-            .into_iter()
-            .map(|item| item.wire_transaction)
-            .collect();
+        let batch = batch.into_iter().map(|item| item.data).collect();
         if let Err(e) = worker.try_send_transaction_batch(batch) {
             error!(
                 "Failed to send transaction batch to worker: {:?}, error {:?}",
@@ -244,7 +238,7 @@ pub struct ConnectionWorker {
     state: ConnectionState,
     channel_size: usize,
     cancel: CancellationToken,
-    receiver: tokio::sync::mpsc::Receiver<Vec<Vec<u8>>>,
+    receiver: tokio::sync::mpsc::Receiver<Vec<Bytes>>,
     max_reconnection_attempts: usize,
 }
 
@@ -277,7 +271,7 @@ impl ConnectionWorker {
         endpoint: Arc<Endpoint>,
         peer: SocketAddr,
         queue_size: usize,
-        receiver: tokio::sync::mpsc::Receiver<Vec<Vec<u8>>>,
+        receiver: tokio::sync::mpsc::Receiver<Vec<Bytes>>,
         max_reconnection_attempts: usize,
         cancel: CancellationToken,
     ) -> Self {
@@ -304,11 +298,7 @@ impl ConnectionWorker {
         }
     }
 
-    async fn send_transactions(
-        &mut self,
-        connection: quinn::Connection,
-        transactions: Vec<Vec<u8>>,
-    ) {
+    async fn send_transactions(&mut self, connection: quinn::Connection, transactions: Vec<Bytes>) {
         let start = std::time::Instant::now();
         let tx_len = transactions.len();
         for tx in transactions {
@@ -344,7 +334,7 @@ impl ConnectionWorker {
                             continue;
                         }
                     };
-                    self.send_transactions(conn.clone(), batch.into()).await
+                    self.send_transactions(conn.clone(), batch).await
                 }
                 ConnectionState::Retry(num_reconnects) => {
                     if *num_reconnects > self.max_reconnection_attempts {
@@ -387,5 +377,5 @@ impl ConnectionWorker {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
+    
 }

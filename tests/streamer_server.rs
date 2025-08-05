@@ -1,11 +1,5 @@
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
 use itertools::Itertools;
-use once_cell::sync::OnceCell;
 use paladin_rpc_server::constants::POOL_KEY;
-use paladin_rpc_server::quic::quic_networking::send_data_over_stream;
-use paladin_rpc_server::quic_connectors::{TransactionBatch, TransactionInfo};
-use paladin_rpc_server::slot_watchers::recent_slots::RecentLeaderSlots;
 use paladin_rpc_server::utils::{get_stakes, try_deserialize_lockup_pool};
 use quinn::{VarInt, VarIntBoundsExceeded};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -20,7 +14,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::signer::EncodableKey;
 use solana_streamer::nonblocking::quic::ConnectionPeerType;
-use solana_streamer::nonblocking::stream_throttle::P3_PER_SECOND;
 use solana_streamer::packet::PACKET_DATA_SIZE;
 use solana_streamer::quic::{QuicServerParams, QuicVariant};
 use solana_streamer::streamer::StakedNodes;
@@ -29,11 +22,7 @@ use std::net::UdpSocket;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
-use tokio::task::id;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
 
 mod common;
 
@@ -251,7 +240,7 @@ pub async fn run_test_default_server() {
     );
     let recieve_window = compute_recieve_window(max_stake, min_stake, peer_type);
     info!("max uni streams: {:?}", max_uni_streams);
-    info!("recieve_window: {:?}", recieve_window);
+    info!("recieve_window: {:?} bytes", recieve_window);
 
     let socket_mev = UdpSocket::bind(socket).unwrap();
     let ctrl_c = tokio::signal::ctrl_c();
