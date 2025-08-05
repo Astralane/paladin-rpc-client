@@ -16,7 +16,6 @@ use solana_sdk::signer::EncodableKey;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::signal::ctrl_c;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 

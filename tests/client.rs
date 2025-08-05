@@ -29,7 +29,7 @@ pub async fn test_quic_client() {
     let cancel = CancellationToken::new();
 
     let endpoint =
-        setup_quic_endpoint(bind.parse().unwrap(), identity).expect("Failed to setup endpoint");
+        setup_quic_endpoint(bind.parse().unwrap(), &identity).expect("Failed to setup endpoint");
     // let [sock,] = leader_tracker.next_leaders(1)[0];
     info!("connection established");
 

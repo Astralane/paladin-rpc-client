@@ -376,6 +376,4 @@ impl ConnectionWorker {
 }
 
 #[cfg(test)]
-pub mod test {
-    
-}
+pub mod test {}
