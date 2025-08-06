@@ -21,8 +21,7 @@ impl PalidatorTrackerImpl {
         endpoint: Arc<Endpoint>,
         cancel: CancellationToken,
     ) -> anyhow::Result<(Self, tokio::task::JoinHandle<()>)> {
-        let schedule =
-            PalidatorSchedule::load_latest(&rpc, &endpoint, LoadMethod::PaladinApi).await?;
+        let schedule = PalidatorSchedule::load_latest(&rpc, &endpoint, Default::default()).await?;
         let schedule = Arc::new(RwLock::new(schedule));
         let task = tokio::spawn(Self::run_updater(rpc, endpoint, schedule.clone(), cancel));
         Ok((
@@ -89,7 +88,7 @@ impl PalidatorTrackerImpl {
         rpc: Arc<RpcClient>,
         endpoint: Arc<Endpoint>,
     ) -> anyhow::Result<()> {
-        let updated_cache = PalidatorSchedule::load_latest(&rpc, &endpoint, LoadMethod::PaladinApi)
+        let updated_cache = PalidatorSchedule::load_latest(&rpc, &endpoint, Default::default())
             .await
             .inspect_err(|e| error!("Failed to load latest palidator cache: {:?}", e))?;
         {
