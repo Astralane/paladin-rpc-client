@@ -58,6 +58,7 @@ async fn main() -> anyhow::Result<()> {
 
     let recent_slots = RecentLeaderSlots::new(estimated_current_slot);
     // update recent slots with the latest data
+    info!("Starting slot watcher");
     let mut slot_watcher_stage = SlotWatcher::run_slot_watchers(
         config.ws_urls,
         config.grpc_urls,
@@ -111,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
         1,
     );
 
+    info!("Starting quic forwarder");
     let quic_forwarder_task = quic_forwarder::forward_packets_to_tpu_load_balanced(
         tpu_senders,
         tpu_packet_receiver,
@@ -119,13 +121,15 @@ async fn main() -> anyhow::Result<()> {
 
     //run the rpc task
     let rpc_task = spawn_paladin_json_rpc_server(
-        config.rpc_address,
+        config.rpc_address.clone(),
         leader_tracker,
         verified_txns_sender,
         config.max_slot_offset,
         cancel.clone(),
     )
     .await?;
+
+    info!("rpc server started, listening on {:}", config.rpc_address);
 
     paladin_tracker_handle.await?;
     try_join_all(worker_handles).await?;

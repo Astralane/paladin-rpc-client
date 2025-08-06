@@ -99,12 +99,12 @@ impl AuctionAndForwardStage {
         }
     }
 
-    pub async fn join(&mut self) {
+    pub async fn join(mut self) {
         for thread in self.threads.drain(..) {
-            if thread.is_finished() {
-                thread.join().unwrap();
+            while !thread.is_finished() {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
             }
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            thread.join().unwrap();
         }
     }
 }

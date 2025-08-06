@@ -1,4 +1,4 @@
-use crate::leader_tracker::leader_schedule::PalidatorSchedule;
+use crate::leader_tracker::leader_schedule::{LoadMethod, PalidatorSchedule};
 use crate::leader_tracker::types::{pal_socks_from_ip, PaladinSocketAddrs};
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::utils::PalidatorTracker;
@@ -21,7 +21,8 @@ impl PalidatorTrackerImpl {
         endpoint: Arc<Endpoint>,
         cancel: CancellationToken,
     ) -> anyhow::Result<(Self, tokio::task::JoinHandle<()>)> {
-        let schedule = PalidatorSchedule::load_latest_by_quic_connect(&rpc, &endpoint).await?;
+        let schedule =
+            PalidatorSchedule::load_latest(&rpc, &endpoint, LoadMethod::PaladinApi).await?;
         let schedule = Arc::new(RwLock::new(schedule));
         let task = tokio::spawn(Self::run_updater(rpc, endpoint, schedule.clone(), cancel));
         Ok((
@@ -88,7 +89,7 @@ impl PalidatorTrackerImpl {
         rpc: Arc<RpcClient>,
         endpoint: Arc<Endpoint>,
     ) -> anyhow::Result<()> {
-        let updated_cache = PalidatorSchedule::load_latest_by_quic_connect(&rpc, &endpoint)
+        let updated_cache = PalidatorSchedule::load_latest(&rpc, &endpoint, LoadMethod::PaladinApi)
             .await
             .inspect_err(|e| error!("Failed to load latest palidator cache: {:?}", e))?;
         {
