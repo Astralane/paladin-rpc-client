@@ -1,12 +1,15 @@
-use crate::constants::{PALADIN_LEADERS_API, PAL_PORT, PAL_PORT_MEV_PROTECT};
+use crate::constants::{
+    ASTRALANE_PALADIN_API, PALADIN_LEADERS_API, PAL_PORT, PAL_PORT_MEV_PROTECT,
+};
 use crate::leader_tracker::types::{pal_socks_from_ip, PaladinSocketAddrs};
 use quinn::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::RpcContactInfo;
 use solana_sdk::clock::Slot;
 use std::collections::{BTreeMap, HashMap};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::ops::Add;
+use std::str::FromStr;
 use tracing::info;
 
 // contains all paladin leaders
@@ -22,12 +25,13 @@ pub struct PalidatorSchedule {
 #[derive(Debug, Clone)]
 pub struct PaladinContactInfo {
     pub pubkey: String,
-    pub pal_tpu: SocketAddr,
+    pub ip_address: IpAddr,
 }
 
 #[derive(Debug, Default)]
 pub enum LoadMethod {
     #[default]
+    AstralaneApi,
     PaladinApi,
     QuicConnect,
 }
@@ -44,6 +48,17 @@ impl PalidatorSchedule {
         let leader_keys = leader_schedule.keys().cloned().collect::<Vec<_>>();
         let cluster_nodes = rpc.get_cluster_nodes().await?;
         let palidators = match load_method {
+            LoadMethod::AstralaneApi => {
+                let palidators_result = reqwest::get(ASTRALANE_PALADIN_API).await?;
+                let paladin_keys = palidators_result.json::<HashMap<String, String>>().await?;
+                paladin_keys
+                    .iter()
+                    .map(|(key, ip_str)| PaladinContactInfo {
+                        pubkey: key.to_string(),
+                        ip_address: IpAddr::from_str(&ip_str).unwrap(),
+                    })
+                    .collect::<Vec<_>>()
+            }
             LoadMethod::PaladinApi => {
                 let palidators_result = reqwest::get(PALADIN_LEADERS_API).await?;
                 let paladin_keys = palidators_result.json::<Vec<String>>().await?;
@@ -127,7 +142,7 @@ impl PalidatorSchedule {
                     connection.close(0u32.into(), b"Closing connection");
                     return Some(PaladinContactInfo {
                         pubkey: key,
-                        pal_tpu: addr,
+                        ip_address: addr.ip(),
                     });
                 }
             }
@@ -151,7 +166,7 @@ impl PalidatorSchedule {
         self.slot_schedule
             .range(curr_slot..)
             .take(lookout_num)
-            .map(|(slot, contact)| Some(pal_socks_from_ip(contact.pal_tpu.ip())))
+            .map(|(slot, contact)| Some(pal_socks_from_ip(contact.ip_address)))
             .collect()
     }
 }
@@ -170,6 +185,19 @@ pub mod test {
         let rpc_client = RpcClient::new(rpc_url.to_owned());
         let endpoint = setup_quic_endpoint(bind_address, &keypair).unwrap();
         let list = PalidatorSchedule::load_latest(&rpc_client, &endpoint, LoadMethod::PaladinApi)
+            .await
+            .unwrap();
+        println!("paladin list {:?}", list.get_all_palidator_keys());
+    }
+
+    #[tokio::test]
+    pub async fn load_from_astralane_paladin_list() {
+        let keypair = Keypair::new();
+        let rpc_url = "http://rpc:8899";
+        let bind_address = "0.0.0.0:0".parse().unwrap();
+        let rpc_client = RpcClient::new(rpc_url.to_owned());
+        let endpoint = setup_quic_endpoint(bind_address, &keypair).unwrap();
+        let list = PalidatorSchedule::load_latest(&rpc_client, &endpoint, LoadMethod::AstralaneApi)
             .await
             .unwrap();
         println!("paladin list {:?}", list.get_all_palidator_keys());
