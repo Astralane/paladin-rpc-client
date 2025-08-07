@@ -79,6 +79,12 @@ impl PalidatorSchedule {
             .filter(|(leader_pk, slots)| palidators_keys.contains(leader_pk))
             .collect::<HashMap<_, _>>();
 
+        info!(
+            "total palidators for this epoch {:} is {:}",
+            epoch_info.epoch,
+            palidators.len()
+        );
+
         let mut slot_schedule = BTreeMap::new();
 
         for (key, value) in palidator_schedule.iter_mut() {

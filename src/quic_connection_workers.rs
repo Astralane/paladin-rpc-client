@@ -8,52 +8,39 @@ use quinn::{Connection, Endpoint};
 use solana_sdk::transaction::VersionedTransaction;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::task::JoinError;
-use tokio::time::sleep;
+use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 #[derive(Clone, Debug)]
 pub struct PaladinPacket {
     //transaction data
     pub data: Bytes,
     pub revert_protect: bool,
+    pub created_at: Instant,
 }
 
 impl PaladinPacket {
-    pub fn new(data: Vec<u8>, revert_protect: bool) -> Self {
-        Self {
-            data: Bytes::from(data),
-            revert_protect,
-        }
-    }
-
-    pub fn from_bytes(data: Bytes, revert_protect: bool) -> Self {
+    pub fn new(data: Bytes, revert_protect: bool) -> Self {
         Self {
             data,
             revert_protect,
-        }
-    }
-
-    pub fn from_versioned_transaction(tx: VersionedTransaction, revert_protect: bool) -> Self {
-        let wire_transaction = Bytes::from(bincode::serialize(&tx).unwrap());
-        Self {
-            data: wire_transaction,
-            revert_protect,
+            created_at: Instant::now(),
         }
     }
 }
 
 pub struct ConnectionWorkerInfo {
-    sender: tokio::sync::mpsc::Sender<Vec<Bytes>>,
+    sender: tokio::sync::mpsc::Sender<Vec<PaladinPacket>>,
     handle: tokio::task::JoinHandle<()>,
     cancel: CancellationToken,
 }
 
 impl ConnectionWorkerInfo {
     pub fn new(
-        sender: tokio::sync::mpsc::Sender<Vec<Bytes>>,
+        sender: tokio::sync::mpsc::Sender<Vec<PaladinPacket>>,
         handle: tokio::task::JoinHandle<()>,
         cancel: CancellationToken,
     ) -> Self {
@@ -64,7 +51,7 @@ impl ConnectionWorkerInfo {
         }
     }
 
-    pub fn try_send_transaction_batch(&self, batch: Vec<Bytes>) -> anyhow::Result<()> {
+    pub fn try_send_transaction_batch(&self, batch: Vec<PaladinPacket>) -> anyhow::Result<()> {
         self.sender
             .try_send(batch)
             .context("Failed to send transaction batch")?;
@@ -146,7 +133,6 @@ where
     }
 
     pub async fn run(&mut self) {
-        debug!("Starting connection scheduler");
         let mut workers_cache = WorkersCache::new(self.leader_lookahead * 2, self.cancel.clone());
         loop {
             let packet_batch = tokio::select! {
@@ -162,6 +148,15 @@ where
                     },
                 },
             };
+
+            if packet_batch.is_empty() {
+                continue;
+            }
+
+            debug!(
+                "received packet batch in connection scheduler {:}",
+                packet_batch.len()
+            );
 
             let current_slot = self.recent_slots.estimated_current_slot();
             let (revert_protected_transactions, transactions): (Vec<_>, Vec<_>) =
@@ -201,6 +196,9 @@ where
                 (&current_leader[0], transactions),
                 (&current_leader[1], revert_protected_transactions),
             ] {
+                if txns.is_empty() {
+                    continue;
+                }
                 match workers_cache.get(leader) {
                     Some(worker) => Self::try_send_to_worker(leader, worker, txns),
                     None => debug!("No worker for current leader: {:?}", leader),
@@ -215,7 +213,6 @@ where
         batch: Vec<PaladinPacket>,
     ) {
         debug!("Sending transaction batch to worker: {:?}", peer);
-        let batch = batch.into_iter().map(|item| item.data).collect();
         if let Err(e) = worker.try_send_transaction_batch(batch) {
             error!(
                 "Failed to send transaction batch to worker: {:?}, error {:?}",
@@ -238,7 +235,7 @@ pub struct ConnectionWorker {
     state: ConnectionState,
     channel_size: usize,
     cancel: CancellationToken,
-    receiver: tokio::sync::mpsc::Receiver<Vec<Bytes>>,
+    receiver: tokio::sync::mpsc::Receiver<Vec<PaladinPacket>>,
     max_reconnection_attempts: usize,
 }
 
@@ -271,7 +268,7 @@ impl ConnectionWorker {
         endpoint: Arc<Endpoint>,
         peer: SocketAddr,
         queue_size: usize,
-        receiver: tokio::sync::mpsc::Receiver<Vec<Bytes>>,
+        receiver: tokio::sync::mpsc::Receiver<Vec<PaladinPacket>>,
         max_reconnection_attempts: usize,
         cancel: CancellationToken,
     ) -> Self {
@@ -298,17 +295,25 @@ impl ConnectionWorker {
         }
     }
 
-    async fn send_transactions(&mut self, connection: quinn::Connection, transactions: Vec<Bytes>) {
+    async fn send_transactions(
+        &mut self,
+        connection: quinn::Connection,
+        packets: Vec<PaladinPacket>,
+    ) {
         let start = std::time::Instant::now();
-        let tx_len = transactions.len();
-        for tx in transactions {
-            match send_data_over_stream(&connection, &tx).await {
+        let tx_len = packets.len();
+        for packet in packets {
+            match send_data_over_stream(&connection, &packet.data).await {
                 Ok(_) => {}
                 Err(e) => {
                     self.state = ConnectionState::Retry(0);
                     error!("Failed to send transaction over uni-stream: {:?}", e);
                 }
             }
+            info!(
+                "packet lifetime {:?} milli seconds",
+                packet.created_at.elapsed().as_millis()
+            );
         }
         let duration = start.elapsed();
         debug!(
@@ -323,11 +328,11 @@ impl ConnectionWorker {
         loop {
             match &self.state {
                 ConnectionState::NotSetup => {
-                    debug!("conn not setup yet");
+                    debug!("conn not setup yet for peer {:}", self.peer);
                     self.create_connection(0).await;
                 }
                 ConnectionState::Active(conn) => {
-                    debug!("conn active");
+                    debug!("conn active for peer {:}", self.peer);
                     let batch = match self.receiver.recv().await {
                         Some(batch) => batch,
                         None => {
@@ -357,7 +362,7 @@ impl ConnectionWorker {
         let connecting = match connect {
             Ok(connecting) => connecting,
             Err(e) => {
-                error!("Failed to connect to peer: {:?}", e);
+                error!("Failed to connect to peer: {:?} , {:?}", self.peer, e);
                 self.state = ConnectionState::Retry(retry_attempts + 1);
                 return;
             }

@@ -9,7 +9,7 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerConfig};
 use jsonrpsee::types::error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE};
 use jsonrpsee::types::ErrorObjectOwned;
-use log::error;
+use log::{error, info};
 use solana_client::rpc_client::SerializableTransaction;
 use solana_sdk::transaction::VersionedTransaction;
 use std::any::type_name;
@@ -21,10 +21,11 @@ use tracing::warn;
 const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
 const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
 const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
-#[rpc(server)]
+
+#[rpc(client, server)]
 pub trait PaladinRpc {
     #[method(name = "getHealth")]
-    async fn health(&self) -> String;
+    async fn health(&self) -> RpcResult<String>;
     #[method(name = "sendTransaction")]
     async fn send_transaction(&self, txn: String, revert_protect: bool) -> RpcResult<String>;
 }
@@ -51,16 +52,17 @@ impl PaladinRpcImpl {
 
 #[async_trait]
 impl PaladinRpcServer for PaladinRpcImpl {
-    async fn health(&self) -> String {
-        "Ok".to_string()
+    async fn health(&self) -> RpcResult<String> {
+        Ok("Ok".to_string())
     }
 
     async fn send_transaction(&self, txn: String, revert_protect: bool) -> RpcResult<String> {
         let estimated_current_slot = self.leader_tracker.recent_slots.estimated_current_slot();
         if !self.leader_tracker.is_paladin_slot(estimated_current_slot) {
             warn!(
-                "received transaction at slot {} but not paladin slot",
-                estimated_current_slot
+                "received transaction at slot {} but not paladin slot, next paladin slot is {:?}",
+                estimated_current_slot,
+                self.leader_tracker.next_paladin_slot()
             );
             return Err(invalid_request(&format!(
                 "{:} not paladin slot",

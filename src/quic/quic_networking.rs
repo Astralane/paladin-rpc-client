@@ -59,12 +59,8 @@ pub fn setup_quic_endpoint(
 }
 
 pub async fn send_data_over_stream(connection: &Connection, data: &[u8]) -> Result<(), QuicError> {
-    let mut send_stream = connection.open_uni().await.unwrap();
-    send_stream
-        .write_all(data)
-        .await
-        .map_err(QuicError::from)
-        .unwrap();
+    let mut send_stream = connection.open_uni().await?;
+    send_stream.write_all(data).await.map_err(QuicError::from)?;
     // Stream will be finished when dropped. Finishing here explicitly is a noop.
     Ok(())
 }
