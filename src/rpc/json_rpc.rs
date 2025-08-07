@@ -58,6 +58,7 @@ impl PaladinRpcServer for PaladinRpcImpl {
 
     async fn send_transaction(&self, txn: String, revert_protect: bool) -> RpcResult<String> {
         let estimated_current_slot = self.leader_tracker.recent_slots.estimated_current_slot();
+        info!("recvd transaction at slot {}", estimated_current_slot);
         if !self.leader_tracker.is_paladin_slot(estimated_current_slot) {
             warn!(
                 "received transaction at slot {} but not paladin slot, next paladin slot is {:?}",
