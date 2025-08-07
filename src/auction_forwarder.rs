@@ -1,4 +1,3 @@
-use crate::quic_connection_workers::PaladinPacket;
 use crate::types::VerifiedTransaction;
 use core_affinity::CoreId;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
@@ -9,6 +8,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+use crate::connectin_scheduler::PaladinPacket;
 
 /// Runs auction and forwards transactions to the quic clients.
 /// Transactions are processed in batches and sent to TPU client

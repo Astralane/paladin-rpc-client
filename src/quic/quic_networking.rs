@@ -25,7 +25,7 @@ fn create_client_config(client_certificate: Arc<QuicClientCertificate>) -> Clien
 
     let transport_config = {
         let mut res = TransportConfig::default();
-
+        
         let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
         res.max_idle_timeout(Some(timeout));
         res.keep_alive_interval(Some(QUIC_KEEP_ALIVE));

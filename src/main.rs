@@ -1,9 +1,9 @@
 use futures_util::future::try_join_all;
 use itertools::Itertools;
 use paladin_rpc_server::auction_forwarder::AuctionAndForwardStage;
+use paladin_rpc_server::connectin_scheduler::ConnectionScheduler;
 use paladin_rpc_server::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
 use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
-use paladin_rpc_server::quic_connection_workers::ConnectionScheduler;
 use paladin_rpc_server::quic_forwarder;
 use paladin_rpc_server::rpc::json_rpc::spawn_paladin_json_rpc_server;
 use paladin_rpc_server::slot_watchers::recent_slots::RecentLeaderSlots;

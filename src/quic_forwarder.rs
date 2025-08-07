@@ -1,6 +1,6 @@
-use crate::quic_connection_workers::PaladinPacket;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+use crate::connectin_scheduler::PaladinPacket;
 
 pub fn forward_packets_to_tpu_load_balanced(
     quic_client_senders: Vec<tokio::sync::mpsc::Sender<Vec<PaladinPacket>>>,

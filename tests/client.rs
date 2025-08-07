@@ -8,7 +8,6 @@ use jsonrpsee::http_client::HttpClient;
 use paladin_rpc_server::constants::ASTRALANE_PALADIN_API;
 use paladin_rpc_server::leader_tracker::palidator_tracker::stub_tracker::StubPalidatorTracker;
 use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
-use paladin_rpc_server::quic_connection_workers::{ConnectionScheduler, PaladinPacket};
 use paladin_rpc_server::rpc::json_rpc::PaladinRpcClient;
 use paladin_rpc_server::slot_watchers::recent_slots::RecentLeaderSlots;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -72,6 +71,7 @@ pub async fn test_quic_client() {
 
 use serde::{Deserialize, Serialize};
 use solana_commitment_config::CommitmentConfig;
+use paladin_rpc_server::connectin_scheduler::{ConnectionScheduler, PaladinPacket};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PaladinNextLeader {
