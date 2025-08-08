@@ -11,6 +11,7 @@ use solana_streamer::nonblocking::quic::ALPN_TPU_PROTOCOL_ID;
 use solana_tls_utils::tls_client_config_builder;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 fn create_client_config(client_certificate: Arc<QuicClientCertificate>) -> ClientConfig {
     // adapted from QuicLazyInitializedEndpoint::create_endpoint
@@ -25,10 +26,10 @@ fn create_client_config(client_certificate: Arc<QuicClientCertificate>) -> Clien
 
     let transport_config = {
         let mut res = TransportConfig::default();
-        
-        let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
+
+        let timeout = IdleTimeout::try_from(Duration::from_secs(4)).unwrap();
         res.max_idle_timeout(Some(timeout));
-        res.keep_alive_interval(Some(QUIC_KEEP_ALIVE));
+        res.keep_alive_interval(Some(Duration::from_millis(500)));
         res.send_fairness(QUIC_SEND_FAIRNESS);
 
         res

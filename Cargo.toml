@@ -17,8 +17,8 @@ solana-streamer = { git = "https://github.com/paladin-bladesmith/paladin-solana.
 paladin-lockup-program = { git = "https://github.com/paladin-bladesmith/paladin-solana.git", tag = "v2.3.6-paladin" }
 solana-tpu-client-next = "2.3.6"
 spl-discriminator = "0.4.1"
-solana-quic-definitions = "2.3.1"
-solana-sdk = { version = "2.3.1" }
+solana-quic-definitions = "2.2.1"
+solana-sdk = { version = "2.2.1" }
 
 solana-commitment-config = "2.2.1"
 yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc.git", tag = "v8.0.0+solana.2.3.3" }

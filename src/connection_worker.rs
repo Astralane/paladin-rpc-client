@@ -99,7 +99,7 @@ impl ConnectionWorker {
                         if let Some(last_connection_created_at) = self.last_connection_created_at {
                             error!(
                                 "timed out, peer last connection lifetime: {:?}",
-                                last_connection_created_at.elapsed().as_millis()
+                                last_connection_created_at.elapsed().as_secs()
                             );
                         }
                     }

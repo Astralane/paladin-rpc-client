@@ -7,7 +7,7 @@ pub struct VerifiedTransaction {
     pub revert_protect: bool,
     signature: Option<Signature>,
     api_key: Option<String>,
-    recv_timestamp: SystemTime,
+    pub recv_timestamp: SystemTime,
     recv_slot: u64,
 }
 
