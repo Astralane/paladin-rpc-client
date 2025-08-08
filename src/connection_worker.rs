@@ -171,7 +171,7 @@ impl ConnectionWorker {
                 conn
             }
             Err(e) => {
-                error!("Failed to connect to peer: {:?}", e);
+                error!("Failed to connection to peer: {:?}, {:?}", self.peer, e);
                 self.state = ConnectionState::Retry(retry_attempts + 1);
                 return;
             }
