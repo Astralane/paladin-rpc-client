@@ -22,7 +22,7 @@ use tracing::info;
 #[derive(Deserialize, Debug)]
 struct Config {
     leader_look_ahead: usize,
-    rpc_address: SocketAddr,
+    rpc_bind_address: SocketAddr,
     max_slot_offset: i32,
     identity_paths: Vec<String>,
     rpc_url: String,
@@ -121,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
 
     //run the rpc task
     let rpc_task = spawn_paladin_json_rpc_server(
-        config.rpc_address.clone(),
+        config.rpc_bind_address.clone(),
         leader_tracker,
         verified_txns_sender,
         config.max_slot_offset,
@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    info!("rpc server started, listening on {:}", config.rpc_address);
+    info!("rpc server started, listening on {:}", config.rpc_bind_address);
 
     paladin_tracker_handle.await?;
     try_join_all(worker_handles).await?;

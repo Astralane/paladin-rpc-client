@@ -1,6 +1,6 @@
 {
   "leader_look_ahead": 10,
-  "rpc_address": "127.0.0.1:8899",
+  "rpc_bind_address": "127.0.0.1:8899",
   "max_slot_offset": 2,
   "identity_paths": [
     "/Users/nuel/.config/solana/sig_pal.json"
