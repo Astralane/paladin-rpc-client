@@ -104,7 +104,10 @@ impl ConnectionWorker {
                         }
                     }
                     self.state = ConnectionState::Retry(0);
-                    error!("Failed to send transaction over uni-stream: {:?}", e);
+                    error!(
+                        "Failed to send transaction over uni-stream: {:?} for peer {:?}",
+                        e, self.peer
+                    );
                 }
             }
             info!(
