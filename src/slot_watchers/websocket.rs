@@ -62,7 +62,7 @@ impl WebsocketSlotWatcher {
 
                 let curr_slot = match item {
                     SlotUpdate::FirstShredReceived { slot, .. } => slot,
-                    SlotUpdate::Completed { slot, .. } => slot + 1,
+                    SlotUpdate::Completed { slot, .. } => continue,
                     _ => continue,
                 };
                 recent_slots.record_slot(curr_slot);

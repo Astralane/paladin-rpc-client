@@ -79,7 +79,8 @@ impl GrpcSlotWatcher {
                     match update.update_oneof {
                         Some(UpdateOneof::Slot(SubscribeUpdateSlot { slot, status, .. })) => {
                             let current_slot = if status == SlotStatus::SlotCompleted as i32 {
-                                slot + 1
+                                // slot + 1
+                                continue;
                             } else if status == SlotStatus::SlotFirstShredReceived as i32 {
                                 slot
                             } else {
