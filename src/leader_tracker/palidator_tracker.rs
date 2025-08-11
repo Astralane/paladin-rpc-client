@@ -69,6 +69,8 @@ impl PalidatorTrackerImpl {
     ) {
         const ONE_HOUR: u64 = 60 * 60;
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(ONE_HOUR));
+        //run the first tick optimistically
+        tick.tick().await;
         loop {
             let _ = tokio::select! {
                 _ = cancel.cancelled() => {
