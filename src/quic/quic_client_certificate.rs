@@ -1,7 +1,7 @@
+use solana_tls_utils::new_dummy_x509_certificate;
 use {
     rustls::pki_types::{CertificateDer, PrivateKeyDer},
     solana_sdk::signature::Keypair,
-    solana_streamer::tls_certificates::new_dummy_x509_certificate,
 };
 
 pub struct QuicClientCertificate {
