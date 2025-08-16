@@ -16,8 +16,10 @@ use solana_sdk::signer::EncodableKey;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use paladin_rpc_server::otel_tracer::{get_subscriber_with_otpl, init_subscriber, init_subscriber_without_signoz};
 
 #[derive(Deserialize, Debug)]
 struct Config {
@@ -33,6 +35,8 @@ struct Config {
     quic_txn_max_batch_size: usize,
     quic_worker_queue_size: usize,
     auction_interval_ms: u64,
+    otpl_endpoint: Option<String>,
+    rust_log: Option<String>,
 }
 
 #[tokio::main]
@@ -42,7 +46,18 @@ async fn main() -> anyhow::Result<()> {
         .expect(&format!("Failed to read config file {}", config_path));
     let config = serde_json::from_str::<Config>(&config_file).expect("Failed to parse config");
 
-    tracing_subscriber::fmt::init();
+    match config.otpl_endpoint.clone() {
+        Some(endpoint) => {
+            let subscriber = get_subscriber_with_otpl(
+                config.rust_log.unwrap_or("info".to_string()),
+                endpoint,
+                std::io::stdout,
+            )
+                .await;
+            init_subscriber(subscriber)
+        }
+        None => init_subscriber_without_signoz(std::io::stdout),
+    }
     let cancel = CancellationToken::new();
 
     let paladin_keypairs: Vec<Keypair> = config
