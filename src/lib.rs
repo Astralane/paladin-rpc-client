@@ -9,3 +9,4 @@ pub mod rpc;
 pub mod slot_watchers;
 pub mod types;
 pub mod utils;
+pub mod otel_tracer;
