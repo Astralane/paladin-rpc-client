@@ -1,4 +1,4 @@
-use crate::leader_tracker::leader_schedule::{LoadMethod, PalidatorSchedule};
+use crate::leader_tracker::leader_schedule::PalidatorSchedule;
 use crate::leader_tracker::types::{pal_socks_from_ip, PaladinSocketAddrs};
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::utils::PalidatorTracker;

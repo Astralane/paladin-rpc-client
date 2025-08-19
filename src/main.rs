@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     let (tpu_packet_sender, tpu_packet_receiver) = tokio::sync::mpsc::channel(512);
     let (verified_txns_sender, verified_txns_receiver) = crossbeam_channel::unbounded();
 
-    let mut forward_and_auction_stage = AuctionAndForwardStage::spawn_new(
+    let forward_and_auction_stage = AuctionAndForwardStage::spawn_new(
         Duration::from_millis(config.auction_interval_ms),
         verified_txns_receiver,
         tpu_packet_sender,

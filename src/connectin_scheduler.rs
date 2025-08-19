@@ -1,19 +1,16 @@
 use crate::connection_worker::spawn_new_connection_worker;
-use crate::quic::quic_networking::send_data_over_stream;
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::utils::PalidatorTracker;
 use anyhow::Context;
 use bytes::Bytes;
 use lru::LruCache;
-use quinn::{Connection, Endpoint};
-use solana_sdk::transaction::VersionedTransaction;
+use quinn::Endpoint;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 use tokio::task::JoinError;
-use tokio::time::{sleep, Instant};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
 pub struct PaladinPacket {
