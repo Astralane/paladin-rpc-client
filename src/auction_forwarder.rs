@@ -103,6 +103,7 @@ impl AuctionAndForwardStage {
                 TrySendError::Closed(_) => {
                     panic!("TPU client sender is closed");
                     counter!("paladin_rpc_client_tpu_client_channel_closed").increment(1);
+                    panic!("TPU client sender is closed");
                 }
             },
         }
