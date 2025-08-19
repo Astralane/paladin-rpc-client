@@ -1,5 +1,6 @@
 use futures_util::future::try_join_all;
 use itertools::Itertools;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use paladin_rpc_server::auction_forwarder::AuctionAndForwardStage;
 use paladin_rpc_server::connectin_scheduler::ConnectionScheduler;
 use paladin_rpc_server::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
@@ -33,6 +34,8 @@ struct Config {
     quic_txn_max_batch_size: usize,
     quic_worker_queue_size: usize,
     auction_interval_ms: u64,
+    disable_auction: bool,
+    prometheus_address: Option<SocketAddr>,
 }
 
 #[tokio::main]
@@ -44,6 +47,13 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
     let cancel = CancellationToken::new();
+
+    if let Some(prometheus_address) = config.prometheus_address {
+        PrometheusBuilder::new()
+            .with_http_listener(prometheus_address)
+            .install()
+            .expect("Failed to install prometheus exporter");
+    }
 
     let paladin_keypairs: Vec<Keypair> = config
         .identity_paths
@@ -110,6 +120,7 @@ async fn main() -> anyhow::Result<()> {
         cancel.clone(),
         config.quic_txn_max_batch_size,
         1,
+        config.disable_auction,
     );
 
     info!("Starting quic forwarder");
@@ -129,7 +140,10 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    info!("rpc server started, listening on {:}", config.rpc_bind_address);
+    info!(
+        "rpc server started, listening on {:}",
+        config.rpc_bind_address
+    );
 
     paladin_tracker_handle.await?;
     try_join_all(worker_handles).await?;

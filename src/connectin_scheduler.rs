@@ -94,6 +94,12 @@ impl WorkersCache {
     pub fn get(&mut self, peer: &SocketAddr) -> Option<&mut ConnectionWorkerInfo> {
         self.workers.get_mut(peer)
     }
+
+    pub async fn shutdown(self) {
+        for (_, worker) in self.workers {
+            worker.shutdown().await.unwrap();
+        }
+    }
 }
 
 pub struct ConnectionScheduler<T> {
@@ -206,6 +212,7 @@ where
                 }
             }
         }
+        workers_cache.shutdown().await;
     }
 
     fn try_send_to_worker(

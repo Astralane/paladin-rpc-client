@@ -1,6 +1,7 @@
 use crate::connectin_scheduler::{ConnectionWorkerInfo, PaladinPacket};
 use crate::quic::error::QuicError;
 use crate::quic::quic_networking::send_data_over_stream;
+use metrics::{counter, histogram};
 use quinn::{Connection, Endpoint};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -95,6 +96,7 @@ impl ConnectionWorker {
             match send_data_over_stream(&connection, &packet.data).await {
                 Ok(_) => {}
                 Err(e) => {
+                    counter!("paladin_rpc_client_quic_worker_error", "peer"=> self.peer.to_string(), "error"=> format!("{:?}", e)).increment(1);
                     if matches!(e, QuicError::Connection(quinn::ConnectionError::TimedOut)) {
                         if let Some(last_connection_created_at) = self.last_connection_created_at {
                             error!(
@@ -114,6 +116,8 @@ impl ConnectionWorker {
                 "packet lifetime {:?} milli seconds",
                 packet.created_at.elapsed().as_millis()
             );
+            histogram!("paladin_rpc_client_total_time_to_send_packet")
+                .record(packet.created_at.elapsed().as_millis() as f64);
         }
         let duration = start.elapsed();
         debug!(
@@ -121,6 +125,8 @@ impl ConnectionWorker {
             tx_len,
             duration.as_millis()
         );
+        histogram!("paladin_rpc_client_total_time_to_stream_transactions")
+            .record(duration.as_millis() as f64);
     }
 
     async fn handle_peer_connection(&mut self) {
