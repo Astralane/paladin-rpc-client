@@ -1,11 +1,10 @@
 use crate::quic::error::{IoErrorWithPartialEq, QuicError};
 use crate::quic::quic_client_certificate::QuicClientCertificate;
-use futures_util::TryFutureExt;
 use quinn::{
     crypto::rustls::QuicClientConfig, ClientConfig, Connection, Endpoint, IdleTimeout,
     TransportConfig,
 };
-use solana_quic_definitions::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT, QUIC_SEND_FAIRNESS};
+use solana_quic_definitions::QUIC_SEND_FAIRNESS;
 use solana_sdk::signature::Keypair;
 use solana_streamer::nonblocking::quic::ALPN_TPU_PROTOCOL_ID;
 use solana_tls_utils::tls_client_config_builder;

@@ -10,6 +10,7 @@ use jsonrpsee::server::{ServerBuilder, ServerConfig};
 use jsonrpsee::types::error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE};
 use jsonrpsee::types::ErrorObjectOwned;
 use log::{error, info};
+use metrics::counter;
 use solana_client::rpc_client::SerializableTransaction;
 use solana_sdk::transaction::VersionedTransaction;
 use std::any::type_name;
@@ -18,7 +19,6 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
 const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
 const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
@@ -57,6 +57,7 @@ impl PaladinRpcServer for PaladinRpcImpl {
     }
 
     async fn send_transaction(&self, txn: String, revert_protect: bool) -> RpcResult<String> {
+        counter!("paladin_rpc_client_received_tx_count").increment(1);
         let estimated_current_slot = self.leader_tracker.recent_slots.estimated_current_slot();
         info!("recvd transaction at slot {}", estimated_current_slot);
         if !self.leader_tracker.is_paladin_slot(estimated_current_slot) {
@@ -65,13 +66,14 @@ impl PaladinRpcServer for PaladinRpcImpl {
                 estimated_current_slot,
                 self.leader_tracker.next_paladin_slot()
             );
+            counter!("paladin_rpc_client_received_tx_not_paladin_slot_count").increment(1);
             return Err(invalid_request(&format!(
                 "{:} not paladin slot",
                 estimated_current_slot,
             )));
         }
         let (wire_output, versioned_tx) = decode_and_verify_transaction(txn)?;
-        let signature = versioned_tx.get_signature().clone();
+        let signature = *versioned_tx.get_signature();
         let verified_transaction = VerifiedTransaction::from_transaction(
             wire_output,
             revert_protect,
@@ -80,9 +82,12 @@ impl PaladinRpcServer for PaladinRpcImpl {
             estimated_current_slot,
         );
         match self.auction_sender.send(verified_transaction) {
-            Ok(_) => {}
+            Ok(_) => {
+                counter!("paladin_rpc_client_tx_sent_to_auction_thread").increment(1);
+            }
             Err(_) => {
                 warn!("failed to send transaction to rpc server");
+                counter!("paladin_rpc_client_tx_failed_to_send_to_auction_thread").increment(1);
                 return Err(internal_error("failed to send transaction to rpc server"));
             }
         }

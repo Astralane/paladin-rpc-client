@@ -1,4 +1,4 @@
-use crate::connectin_scheduler::PaladinPacket;
+use crate::connection_scheduler::PaladinPacket;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
@@ -38,7 +38,7 @@ pub fn forward_packets_to_tpu_load_balanced(
                         error!("Packet batch sender is full");
                         // increase dropped metrics
                     }
-                    tokio::sync::mpsc::error::TrySendError::Closed(e) => {
+                    tokio::sync::mpsc::error::TrySendError::Closed(_e) => {
                         panic!("Packet batch sender is closed");
                     }
                 },

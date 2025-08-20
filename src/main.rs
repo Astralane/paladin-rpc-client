@@ -1,7 +1,7 @@
 use futures_util::future::try_join_all;
-use itertools::Itertools;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use paladin_rpc_server::auction_forwarder::AuctionAndForwardStage;
-use paladin_rpc_server::connectin_scheduler::ConnectionScheduler;
+use paladin_rpc_server::connection_scheduler::ConnectionScheduler;
 use paladin_rpc_server::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
 use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
 use paladin_rpc_server::quic_forwarder;
@@ -33,17 +33,27 @@ struct Config {
     quic_txn_max_batch_size: usize,
     quic_worker_queue_size: usize,
     auction_interval_ms: u64,
+    disable_auction: bool,
+    prometheus_address: Option<SocketAddr>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config_path = std::env::args().nth(1).expect("No config path provided");
     let config_file = std::fs::read_to_string(config_path.clone())
-        .expect(&format!("Failed to read config file {}", config_path));
+        .unwrap_or_else(|_| panic!("Failed to read config file {}", config_path));
+
     let config = serde_json::from_str::<Config>(&config_file).expect("Failed to parse config");
 
     tracing_subscriber::fmt::init();
     let cancel = CancellationToken::new();
+
+    if let Some(prometheus_address) = config.prometheus_address {
+        PrometheusBuilder::new()
+            .with_http_listener(prometheus_address)
+            .install()
+            .expect("Failed to install prometheus exporter");
+    }
 
     let paladin_keypairs: Vec<Keypair> = config
         .identity_paths
@@ -88,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
                 endpoint.clone(),
                 config.leader_look_ahead,
                 receiver,
-                config.quic_max_reconnection_attempts,
+                config.quic_worker_queue_size,
                 config.quic_max_reconnection_attempts,
                 cancel.clone(),
             );
@@ -102,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     let (tpu_packet_sender, tpu_packet_receiver) = tokio::sync::mpsc::channel(512);
     let (verified_txns_sender, verified_txns_receiver) = crossbeam_channel::unbounded();
 
-    let mut forward_and_auction_stage = AuctionAndForwardStage::spawn_new(
+    let forward_and_auction_stage = AuctionAndForwardStage::spawn_new(
         Duration::from_millis(config.auction_interval_ms),
         verified_txns_receiver,
         tpu_packet_sender,
@@ -110,6 +120,7 @@ async fn main() -> anyhow::Result<()> {
         cancel.clone(),
         config.quic_txn_max_batch_size,
         1,
+        config.disable_auction,
     );
 
     info!("Starting quic forwarder");
@@ -121,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
 
     //run the rpc task
     let rpc_task = spawn_paladin_json_rpc_server(
-        config.rpc_bind_address.clone(),
+        config.rpc_bind_address,
         leader_tracker,
         verified_txns_sender,
         config.max_slot_offset,
@@ -129,7 +140,10 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    info!("rpc server started, listening on {:}", config.rpc_bind_address);
+    info!(
+        "rpc server started, listening on {:}",
+        config.rpc_bind_address
+    );
 
     paladin_tracker_handle.await?;
     try_join_all(worker_handles).await?;

@@ -1,19 +1,16 @@
 use crate::connection_worker::spawn_new_connection_worker;
-use crate::quic::quic_networking::send_data_over_stream;
 use crate::slot_watchers::recent_slots::RecentLeaderSlots;
 use crate::utils::PalidatorTracker;
 use anyhow::Context;
 use bytes::Bytes;
 use lru::LruCache;
-use quinn::{Connection, Endpoint};
-use solana_sdk::transaction::VersionedTransaction;
+use quinn::Endpoint;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 use tokio::task::JoinError;
-use tokio::time::{sleep, Instant};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
 pub struct PaladinPacket {
@@ -68,14 +65,12 @@ impl ConnectionWorkerInfo {
 
 pub struct WorkersCache {
     workers: LruCache<SocketAddr, ConnectionWorkerInfo>,
-    cancel: CancellationToken,
 }
 
 impl WorkersCache {
-    pub fn new(capacity: usize, cancel: CancellationToken) -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
             workers: LruCache::new(capacity.try_into().unwrap()),
-            cancel,
         }
     }
 
@@ -94,6 +89,12 @@ impl WorkersCache {
     pub fn get(&mut self, peer: &SocketAddr) -> Option<&mut ConnectionWorkerInfo> {
         self.workers.get_mut(peer)
     }
+
+    pub async fn shutdown(self) {
+        for (_, worker) in self.workers {
+            worker.shutdown().await.unwrap();
+        }
+    }
 }
 
 pub struct ConnectionScheduler<T> {
@@ -111,6 +112,7 @@ impl<T> ConnectionScheduler<T>
 where
     T: PalidatorTracker,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         leader_tracker: T,
         recent_slots: RecentLeaderSlots,
@@ -134,7 +136,7 @@ where
     }
 
     pub async fn run(&mut self) {
-        let mut workers_cache = WorkersCache::new(self.leader_lookahead * 2, self.cancel.clone());
+        let mut workers_cache = WorkersCache::new(self.leader_lookahead * 2);
         loop {
             let packet_batch = tokio::select! {
                 _ = self.cancel.cancelled() => {
@@ -159,7 +161,11 @@ where
                 packet_batch.len()
             );
 
-            let current_slot = self.recent_slots.estimated_current_slot();
+            debug!(
+                "received in current slot {:}",
+                self.recent_slots.estimated_current_slot()
+            );
+
             let (revert_protected_transactions, transactions): (Vec<_>, Vec<_>) =
                 packet_batch.into_iter().partition(|tx| tx.revert_protect);
 
@@ -206,6 +212,7 @@ where
                 }
             }
         }
+        workers_cache.shutdown().await;
     }
 
     fn try_send_to_worker(

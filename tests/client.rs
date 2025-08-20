@@ -5,7 +5,6 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use bytes::Bytes;
 use jsonrpsee::http_client::HttpClient;
-use paladin_rpc_server::constants::ASTRALANE_PALADIN_API;
 use paladin_rpc_server::leader_tracker::palidator_tracker::stub_tracker::StubPalidatorTracker;
 use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
 use paladin_rpc_server::rpc::json_rpc::PaladinRpcClient;
@@ -14,7 +13,6 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::message::Message;
 use solana_sdk::signature::{EncodableKey, Keypair, Signer};
 use solana_sdk::transaction::Transaction;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -69,7 +67,7 @@ pub async fn test_quic_client() {
     tokio::time::sleep(Duration::from_secs(10)).await;
 }
 
-use paladin_rpc_server::connectin_scheduler::{ConnectionScheduler, PaladinPacket};
+use paladin_rpc_server::connection_scheduler::{ConnectionScheduler, PaladinPacket};
 use serde::{Deserialize, Serialize};
 use solana_commitment_config::CommitmentConfig;
 

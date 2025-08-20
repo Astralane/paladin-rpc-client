@@ -1,8 +1,9 @@
-use crate::connectin_scheduler::PaladinPacket;
+use crate::connection_scheduler::PaladinPacket;
 use crate::types::VerifiedTransaction;
 use core_affinity::CoreId;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use itertools::Itertools;
+use metrics::{counter, histogram};
 use std::collections::VecDeque;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
@@ -13,12 +14,12 @@ use tracing::error;
 /// Runs auction and forwards transactions to the quic clients.
 /// Transactions are processed in batches and sent to TPU client
 /// only after they have been held for at least one auction duration.
-
 pub struct AuctionAndForwardStage {
     threads: Vec<JoinHandle<()>>,
 }
 
 impl AuctionAndForwardStage {
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn_new(
         auction_duration: Duration,
         verified_transaction_receiver: Receiver<VerifiedTransaction>,
@@ -27,6 +28,7 @@ impl AuctionAndForwardStage {
         cancel: CancellationToken,
         batch_size: usize,
         num_threads: usize,
+        disable_auction: bool,
     ) -> Self {
         const RECV_TIMEOUT: Duration = Duration::from_millis(10);
         let threads = (0..num_threads)
@@ -55,7 +57,10 @@ impl AuctionAndForwardStage {
                                     RecvTimeoutError::Disconnected => break,
                                 },
                             };
-                            if last_auction_time.elapsed() > auction_duration {
+                            if last_auction_time.elapsed() > auction_duration || disable_auction {
+                                histogram!("paladin_rpc_client_buffer_size")
+                                    .record(transaction_buffer.len() as f64);
+
                                 for chunks in &transaction_buffer.drain(..).chunks(batch_size) {
                                     // create a batch and send to tpu client sender,
                                     // clone is cheap due to bytes
@@ -70,6 +75,10 @@ impl AuctionAndForwardStage {
                                     Self::try_forward_batch(&tpu_forwarder_sender, batch);
                                 }
                                 transaction_buffer.clear();
+
+                                histogram!("paladin_rpc_client_auction_time")
+                                    .record(last_auction_time.elapsed().as_millis() as f64);
+
                                 last_auction_time = std::time::Instant::now();
                             }
                         }
@@ -88,10 +97,12 @@ impl AuctionAndForwardStage {
             Ok(_) => {}
             Err(e) => match e {
                 TrySendError::Full(_) => {
-                    error!("TPU client sender is full, dropping transactions")
+                    error!("TPU client sender is full, dropping transactions");
+                    counter!("paladin_rpc_client_tpu_client_channel_full").increment(1);
                 }
                 TrySendError::Closed(_) => {
-                    panic!("TPU client sender is closed")
+                    counter!("paladin_rpc_client_tpu_client_channel_closed").increment(1);
+                    panic!("TPU client sender is closed");
                 }
             },
         }

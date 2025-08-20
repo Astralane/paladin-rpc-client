@@ -2,6 +2,7 @@ use bytes::Bytes;
 use solana_sdk::signature::Signature;
 use std::time::SystemTime;
 
+#[allow(dead_code)]
 pub struct VerifiedTransaction {
     pub wire_transaction: Bytes,
     pub revert_protect: bool,
