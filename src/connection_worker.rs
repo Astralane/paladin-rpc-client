@@ -21,7 +21,6 @@ pub struct ConnectionWorker {
     endpoint: Arc<Endpoint>,
     peer: SocketAddr,
     state: ConnectionState,
-    channel_size: usize,
     cancel: CancellationToken,
     receiver: tokio::sync::mpsc::Receiver<Vec<PaladinPacket>>,
     max_reconnection_attempts: usize,
@@ -39,7 +38,6 @@ pub fn spawn_new_connection_worker(
     let mut worker = ConnectionWorker::new(
         endpoint.clone(),
         peer,
-        queue_size,
         receiver,
         max_reconnect_attempts,
         cancel.clone(),
@@ -56,7 +54,6 @@ impl ConnectionWorker {
     pub fn new(
         endpoint: Arc<Endpoint>,
         peer: SocketAddr,
-        queue_size: usize,
         receiver: tokio::sync::mpsc::Receiver<Vec<PaladinPacket>>,
         max_reconnection_attempts: usize,
         cancel: CancellationToken,
@@ -65,7 +62,6 @@ impl ConnectionWorker {
             endpoint,
             peer,
             state: ConnectionState::NotSetup,
-            channel_size: queue_size,
             receiver,
             max_reconnection_attempts,
             cancel,

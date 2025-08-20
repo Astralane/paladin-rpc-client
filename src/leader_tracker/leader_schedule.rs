@@ -55,18 +55,17 @@ impl PalidatorSchedule {
                     .iter()
                     .map(|(key, ip_str)| PaladinContactInfo {
                         pubkey: key.to_string(),
-                        ip_address: IpAddr::from_str(&ip_str).unwrap(),
+                        ip_address: IpAddr::from_str(ip_str).unwrap(),
                     })
                     .collect::<Vec<_>>()
             }
             LoadMethod::PaladinApi => {
                 let palidators_result = reqwest::get(PALADIN_LEADERS_API).await?;
                 let paladin_keys = palidators_result.json::<Vec<String>>().await?;
-                Self::find_palidators_by_quic_connect(&endpoint, &paladin_keys, &cluster_nodes)
-                    .await
+                Self::find_palidators_by_quic_connect(endpoint, &paladin_keys, &cluster_nodes).await
             }
             LoadMethod::QuicConnect => {
-                Self::find_palidators_by_quic_connect(&endpoint, &leader_keys, &cluster_nodes).await
+                Self::find_palidators_by_quic_connect(endpoint, &leader_keys, &cluster_nodes).await
             }
         };
         let palidators_keys = palidators
@@ -76,7 +75,7 @@ impl PalidatorSchedule {
 
         let mut palidator_schedule = leader_schedule
             .into_iter()
-            .filter(|(leader_pk, slots)| palidators_keys.contains(leader_pk))
+            .filter(|(leader_pk, _slots)| palidators_keys.contains(leader_pk))
             .collect::<HashMap<_, _>>();
 
         info!(
@@ -127,7 +126,7 @@ impl PalidatorSchedule {
             );
             let batch_fut = batch
                 .iter()
-                .map(|node| Box::pin(Self::try_connect(&my_endpoint, node)))
+                .map(|node| Box::pin(Self::try_connect(my_endpoint, node)))
                 .collect::<Vec<_>>();
             let result = futures::future::join_all(batch_fut).await;
             connected_num = connected_num.add(batch.len());
@@ -157,13 +156,6 @@ impl PalidatorSchedule {
         None
     }
 
-    pub fn get_all_palidator_keys(&self) -> Vec<String> {
-        self.palidators
-            .iter()
-            .map(|item| item.pubkey.to_string())
-            .collect()
-    }
-
     pub fn get_next_palidator_leader(
         &self,
         curr_slot: Slot,
@@ -172,7 +164,7 @@ impl PalidatorSchedule {
         self.slot_schedule
             .range(curr_slot..)
             .take(lookout_num)
-            .map(|(slot, contact)| Some(pal_socks_from_ip(contact.ip_address)))
+            .map(|(_, contact)| Some(pal_socks_from_ip(contact.ip_address)))
             .collect()
     }
 }

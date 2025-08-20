@@ -1,5 +1,4 @@
 use futures_util::future::try_join_all;
-use itertools::Itertools;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use paladin_rpc_server::auction_forwarder::AuctionAndForwardStage;
 use paladin_rpc_server::connection_scheduler::ConnectionScheduler;
@@ -42,7 +41,8 @@ struct Config {
 async fn main() -> anyhow::Result<()> {
     let config_path = std::env::args().nth(1).expect("No config path provided");
     let config_file = std::fs::read_to_string(config_path.clone())
-        .expect(&format!("Failed to read config file {}", config_path));
+        .unwrap_or_else(|_| panic!("Failed to read config file {}", config_path));
+
     let config = serde_json::from_str::<Config>(&config_file).expect("Failed to parse config");
 
     tracing_subscriber::fmt::init();
@@ -98,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
                 endpoint.clone(),
                 config.leader_look_ahead,
                 receiver,
-                config.quic_max_reconnection_attempts,
+                config.quic_worker_queue_size,
                 config.quic_max_reconnection_attempts,
                 cancel.clone(),
             );
@@ -132,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
 
     //run the rpc task
     let rpc_task = spawn_paladin_json_rpc_server(
-        config.rpc_bind_address.clone(),
+        config.rpc_bind_address,
         leader_tracker,
         verified_txns_sender,
         config.max_slot_offset,

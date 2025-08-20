@@ -48,8 +48,7 @@ impl PalidatorTrackerImpl {
             .read()
             .unwrap()
             .slot_schedule
-            .get(&slot)
-            .is_some()
+            .contains_key(&slot)
     }
 
     pub fn get_closest_leaders(&self, lookout_num: usize) -> Vec<Option<PaladinSocketAddrs>> {
@@ -72,7 +71,7 @@ impl PalidatorTrackerImpl {
         //run the first tick optimistically
         tick.tick().await;
         loop {
-            let _ = tokio::select! {
+            tokio::select! {
                 _ = cancel.cancelled() => {
                     break;
                 },
@@ -105,7 +104,7 @@ impl PalidatorTracker for PalidatorTrackerImpl {
     fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
         self.get_closest_leaders(lookahead_leaders)
             .into_iter()
-            .filter_map(|addr| addr)
+            .flatten()
             .collect()
     }
 }
@@ -120,7 +119,7 @@ pub mod stub_tracker {
         }
     }
     impl PalidatorTracker for StubPalidatorTracker {
-        fn next_leaders(&self, lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
+        fn next_leaders(&self, _lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
             let socks = pal_socks_from_ip(self.0);
             vec![socks]
         }

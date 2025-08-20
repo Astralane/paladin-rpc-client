@@ -1,6 +1,5 @@
 use crate::quic::error::{IoErrorWithPartialEq, QuicError};
 use crate::quic::quic_client_certificate::QuicClientCertificate;
-use futures_util::TryFutureExt;
 use quinn::{
     crypto::rustls::QuicClientConfig, ClientConfig, Connection, Endpoint, IdleTimeout,
     TransportConfig,

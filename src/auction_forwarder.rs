@@ -14,12 +14,12 @@ use tracing::error;
 /// Runs auction and forwards transactions to the quic clients.
 /// Transactions are processed in batches and sent to TPU client
 /// only after they have been held for at least one auction duration.
-
 pub struct AuctionAndForwardStage {
     threads: Vec<JoinHandle<()>>,
 }
 
 impl AuctionAndForwardStage {
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn_new(
         auction_duration: Duration,
         verified_transaction_receiver: Receiver<VerifiedTransaction>,

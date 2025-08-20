@@ -19,7 +19,6 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
 const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
 const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
@@ -74,7 +73,7 @@ impl PaladinRpcServer for PaladinRpcImpl {
             )));
         }
         let (wire_output, versioned_tx) = decode_and_verify_transaction(txn)?;
-        let signature = versioned_tx.get_signature().clone();
+        let signature = *versioned_tx.get_signature();
         let verified_transaction = VerifiedTransaction::from_transaction(
             wire_output,
             revert_protect,

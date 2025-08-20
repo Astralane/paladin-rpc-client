@@ -65,14 +65,12 @@ impl ConnectionWorkerInfo {
 
 pub struct WorkersCache {
     workers: LruCache<SocketAddr, ConnectionWorkerInfo>,
-    cancel: CancellationToken,
 }
 
 impl WorkersCache {
-    pub fn new(capacity: usize, cancel: CancellationToken) -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
             workers: LruCache::new(capacity.try_into().unwrap()),
-            cancel,
         }
     }
 
@@ -114,6 +112,7 @@ impl<T> ConnectionScheduler<T>
 where
     T: PalidatorTracker,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         leader_tracker: T,
         recent_slots: RecentLeaderSlots,
@@ -137,7 +136,7 @@ where
     }
 
     pub async fn run(&mut self) {
-        let mut workers_cache = WorkersCache::new(self.leader_lookahead * 2, self.cancel.clone());
+        let mut workers_cache = WorkersCache::new(self.leader_lookahead * 2);
         loop {
             let packet_batch = tokio::select! {
                 _ = self.cancel.cancelled() => {
@@ -162,7 +161,11 @@ where
                 packet_batch.len()
             );
 
-            let current_slot = self.recent_slots.estimated_current_slot();
+            debug!(
+                "received in current slot {:}",
+                self.recent_slots.estimated_current_slot()
+            );
+
             let (revert_protected_transactions, transactions): (Vec<_>, Vec<_>) =
                 packet_batch.into_iter().partition(|tx| tx.revert_protect);
 
