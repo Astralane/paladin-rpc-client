@@ -1,4 +1,4 @@
-use crate::connectin_scheduler::PaladinPacket;
+use crate::connection_scheduler::PaladinPacket;
 use crate::types::VerifiedTransaction;
 use core_affinity::CoreId;
 use crossbeam_channel::{Receiver, RecvTimeoutError};

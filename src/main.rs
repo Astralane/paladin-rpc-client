@@ -2,7 +2,7 @@ use futures_util::future::try_join_all;
 use itertools::Itertools;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use paladin_rpc_server::auction_forwarder::AuctionAndForwardStage;
-use paladin_rpc_server::connectin_scheduler::ConnectionScheduler;
+use paladin_rpc_server::connection_scheduler::ConnectionScheduler;
 use paladin_rpc_server::leader_tracker::palidator_tracker::PalidatorTrackerImpl;
 use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
 use paladin_rpc_server::quic_forwarder;

@@ -67,7 +67,7 @@ pub async fn test_quic_client() {
     tokio::time::sleep(Duration::from_secs(10)).await;
 }
 
-use paladin_rpc_server::connectin_scheduler::{ConnectionScheduler, PaladinPacket};
+use paladin_rpc_server::connection_scheduler::{ConnectionScheduler, PaladinPacket};
 use serde::{Deserialize, Serialize};
 use solana_commitment_config::CommitmentConfig;
 

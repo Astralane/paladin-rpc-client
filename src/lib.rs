@@ -1,5 +1,5 @@
 pub mod auction_forwarder;
-pub mod connectin_scheduler;
+pub mod connection_scheduler;
 pub mod connection_worker;
 pub mod constants;
 pub mod leader_tracker;

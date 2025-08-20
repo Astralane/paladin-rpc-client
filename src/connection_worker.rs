@@ -1,4 +1,4 @@
-use crate::connectin_scheduler::{ConnectionWorkerInfo, PaladinPacket};
+use crate::connection_scheduler::{ConnectionWorkerInfo, PaladinPacket};
 use crate::quic::error::QuicError;
 use crate::quic::quic_networking::send_data_over_stream;
 use metrics::{counter, histogram};

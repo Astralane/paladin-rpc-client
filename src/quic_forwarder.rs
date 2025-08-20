@@ -1,4 +1,4 @@
-use crate::connectin_scheduler::PaladinPacket;
+use crate::connection_scheduler::PaladinPacket;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
