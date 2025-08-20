@@ -167,6 +167,14 @@ impl PalidatorSchedule {
             .map(|(_, contact)| Some(pal_socks_from_ip(contact.ip_address)))
             .collect()
     }
+
+    #[cfg(test)]
+    pub fn get_all_palidator_keys(&self) -> Vec<String> {
+        self.palidators
+            .iter()
+            .map(|item| item.pubkey.to_string())
+            .collect()
+    }
 }
 
 #[cfg(test)]
