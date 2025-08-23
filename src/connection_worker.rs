@@ -90,7 +90,9 @@ impl ConnectionWorker {
         let tx_len = packets.len();
         for packet in packets {
             match send_data_over_stream(&connection, &packet.data).await {
-                Ok(_) => {}
+                Ok(_) => {
+                    counter!("paladin_rpc_client_quic_worker_success", "peer"=> self.peer.to_string()).increment(1);
+                }
                 Err(e) => {
                     counter!("paladin_rpc_client_quic_worker_error", "peer"=> self.peer.to_string(), "error"=> format!("{:?}", e)).increment(1);
                     if matches!(e, QuicError::Connection(quinn::ConnectionError::TimedOut)) {
@@ -164,6 +166,7 @@ impl ConnectionWorker {
         let connecting = match connect {
             Ok(connecting) => connecting,
             Err(e) => {
+                counter!("paladin_rpc_client_quic_connect_error", "peer"=> self.peer.to_string(), "error"=> format!("{:?}", e)).increment(1);
                 error!("Failed to connect to peer: {:?} , {:?}", self.peer, e);
                 self.state = ConnectionState::Retry(retry_attempts + 1);
                 return;
@@ -176,7 +179,8 @@ impl ConnectionWorker {
                 conn
             }
             Err(e) => {
-                error!("Failed to connection to peer: {:?}, {:?}", self.peer, e);
+                counter!("paladin_rpc_client_quic_connecting_error", "peer"=> self.peer.to_string(), "error"=> format!("{:?}", e)).increment(1);
+                error!("Failed to connecting to peer: {:?}, {:?}", self.peer, e);
                 self.state = ConnectionState::Retry(retry_attempts + 1);
                 return;
             }
