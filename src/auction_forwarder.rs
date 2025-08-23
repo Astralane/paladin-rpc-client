@@ -30,7 +30,7 @@ impl AuctionAndForwardStage {
         num_threads: usize,
         disable_auction: bool,
     ) -> Self {
-        const RECV_TIMEOUT: Duration = Duration::from_millis(10);
+        const RECV_TIMEOUT: Duration = Duration::from_millis(1);
         let threads = (0..num_threads)
             .map(|id| {
                 let transaction_receiver = verified_transaction_receiver.clone();
