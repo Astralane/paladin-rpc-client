@@ -55,7 +55,7 @@ pub async fn test_quic_client() {
     let wire_transaction = Bytes::from(BASE64_STANDARD.decode(encoded_tx).unwrap());
     let tx_batch = (0..100)
         .into_iter()
-        .map(|_| PaladinPacket::new(wire_transaction.clone(), true))
+        .map(|_| PaladinPacket::new(wire_transaction.clone(), false))
         .collect::<Vec<_>>();
 
     info!("Sending transaction batch");
