@@ -5,18 +5,37 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use bytes::Bytes;
 use jsonrpsee::http_client::HttpClient;
-use paladin_rpc_server::leader_tracker::palidator_tracker::stub_tracker::{DummyValidatorTracker, StubPalidatorTracker};
-use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
+use paladin_rpc_server::leader_tracker::palidator_tracker::stub_tracker::{
+    DummyValidatorTracker, StubPalidatorTracker,
+};
+use paladin_rpc_server::quic::quic_networking::{send_data_over_stream, setup_quic_endpoint};
 use paladin_rpc_server::rpc::json_rpc::PaladinRpcClient;
 use paladin_rpc_server::slot_watchers::recent_slots::RecentLeaderSlots;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::message::Message;
 use solana_sdk::signature::{EncodableKey, Keypair, Signer};
 use solana_sdk::transaction::Transaction;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+
+#[tokio::test]
+pub async fn test_send_data_over_stream() {
+    let bind_addr: SocketAddr = "0.0.0.0:11220".parse().unwrap();
+    let keypair = Keypair::read_from_file("/home/sol/dummy.json").unwrap();
+    let peer: SocketAddr = "198.244.253.220:8003".parse().unwrap();
+    let endpoint = setup_quic_endpoint(bind_addr, &keypair).unwrap();
+    let connecting = endpoint.connect(peer, "quic-test").unwrap();
+    let conn = connecting.await.unwrap();
+    let encoded_tx = "AQ8u+02BWbmWoAp/l5ywboiVfqLvccf0imCVc+UBBOUzRF2n0InBPPWiPZKLuiCIm2XruFl4sjuZQX+Wf0RIsAEBAAED1C+Y6RXlWshcp9Q7xXwA76wBNxlKWPQy3zk0bTZaifYIrbZ5I8Tb2shZFMrMnlo+yQM4KGV+ex41djfeiorzggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXTvopTJh7ISsx99fFL/DNvqXpzmACKWoAIJy+D5pZGkCAgIAAQwCAAAAoIYBAAAAAAACAgAADAIAAABuFAAAAAAAAA==";
+    let wire_transaction = Bytes::from(BASE64_STANDARD.decode(encoded_tx).unwrap());
+    send_data_over_stream(&conn, &wire_transaction)
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_secs(5)).await;
+}
 
 #[tokio::test]
 pub async fn test_quic_client() {
