@@ -27,7 +27,7 @@ pub async fn test_send_data_over_stream() {
     let keypair = Keypair::read_from_file("/home/sol/dummy.json").unwrap();
     let peer: SocketAddr = "198.244.253.220:8003".parse().unwrap();
     let endpoint = setup_quic_endpoint(bind_addr, &keypair).unwrap();
-    let connecting = endpoint.connect(peer, "quic-test").unwrap();
+    let connecting = endpoint.connect(peer, "connect").unwrap();
     let conn = connecting.await.unwrap();
     let encoded_tx = "AQ8u+02BWbmWoAp/l5ywboiVfqLvccf0imCVc+UBBOUzRF2n0InBPPWiPZKLuiCIm2XruFl4sjuZQX+Wf0RIsAEBAAED1C+Y6RXlWshcp9Q7xXwA76wBNxlKWPQy3zk0bTZaifYIrbZ5I8Tb2shZFMrMnlo+yQM4KGV+ex41djfeiorzggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXTvopTJh7ISsx99fFL/DNvqXpzmACKWoAIJy+D5pZGkCAgIAAQwCAAAAoIYBAAAAAAACAgAADAIAAABuFAAAAAAAAA==";
     let wire_transaction = Bytes::from(BASE64_STANDARD.decode(encoded_tx).unwrap());
