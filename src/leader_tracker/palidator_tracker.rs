@@ -111,6 +111,7 @@ impl PalidatorTracker for PalidatorTrackerImpl {
 
 pub mod stub_tracker {
     use super::*;
+    use std::net::SocketAddr;
     pub struct StubPalidatorTracker(IpAddr);
 
     impl StubPalidatorTracker {
@@ -118,10 +119,26 @@ pub mod stub_tracker {
             Self(addr)
         }
     }
+
     impl PalidatorTracker for StubPalidatorTracker {
         fn next_leaders(&self, _lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
             let socks = pal_socks_from_ip(self.0);
             vec![socks]
+        }
+    }
+
+    pub struct DummyValidatorTracker(SocketAddr);
+
+    impl DummyValidatorTracker {
+        pub fn new(socket_addr: SocketAddr) -> Self {
+            Self(socket_addr)
+        }
+    }
+
+    impl PalidatorTracker for DummyValidatorTracker {
+        fn next_leaders(&self, _lookahead_leaders: usize) -> Vec<PaladinSocketAddrs> {
+            let me: [SocketAddr; 2] = [self.0, self.0];
+            vec![me]
         }
     }
 }

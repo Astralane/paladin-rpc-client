@@ -5,7 +5,7 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use bytes::Bytes;
 use jsonrpsee::http_client::HttpClient;
-use paladin_rpc_server::leader_tracker::palidator_tracker::stub_tracker::StubPalidatorTracker;
+use paladin_rpc_server::leader_tracker::palidator_tracker::stub_tracker::{DummyValidatorTracker, StubPalidatorTracker};
 use paladin_rpc_server::quic::quic_networking::setup_quic_endpoint;
 use paladin_rpc_server::rpc::json_rpc::PaladinRpcClient;
 use paladin_rpc_server::slot_watchers::recent_slots::RecentLeaderSlots;
@@ -22,12 +22,11 @@ use tracing::info;
 pub async fn test_quic_client() {
     init_tracing();
     info!("Starting test");
-    let ws_url = "ws://rpc:8900";
     let bind = "0.0.0.0:11220";
-    let identity = Keypair::read_from_file("/Users/nuel/.config/solana/sig_pal.json").unwrap();
+    let identity = Keypair::read_from_file("/home/sol/dummy.json").unwrap();
     println!("{:?}", identity.to_bytes());
     //doggo validator ip: 149.248.51.171
-    let leader_tracker = StubPalidatorTracker::new("149.248.51.171".parse().unwrap());
+    let leader_tracker = DummyValidatorTracker::new("198.244.253.220:8003".parse().unwrap());
 
     let recent_slots = RecentLeaderSlots::new(10);
     let (sender, receiver) = tokio::sync::mpsc::channel::<Vec<PaladinPacket>>(10);
